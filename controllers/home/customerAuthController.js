@@ -53,7 +53,51 @@ class customerAuthController {
   };
 
   customer_login = async (req, res) => {
-    console.log(req.body);
+    // console.log(req.body);
+    const { email, phone, password } = req.body;
+    try {
+      const customer = await customerModel
+        .findOne({ email })
+        .select("+password");
+      if (customer) {
+        const match = await bcrypt.compare(password, customer.password);
+        if (match) {
+          const token = await createToken({
+            id: customer.id,
+            name: customer.name,
+            email: customer.email,
+            phone: customer.phone,
+            method: customer.method,
+          });
+          res.cookie("customerToken", token, {
+            expires: new Date(
+              Date.now() +
+                process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000
+            ),
+          });
+          responseReturn(res, 201, {
+            token,
+            message: "User login successful",
+          });
+        } else {
+          responseReturn(res, 404, {
+            error: "Password wrong",
+          });
+        }
+      } else {
+        responseReturn(res, 404, {
+          error: "Email not found",
+        });
+      }
+    } catch (error) {
+      console.error(
+        "💥 Error in customerAuthController: customer_login:",
+        error
+      );
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
   };
 }
 
