@@ -160,6 +160,47 @@ class cardController {
       });
     }
   }
+
+  async delete_card_product(req, res) {
+    const { card_id } = req.params;
+    // console.log(card_id);
+    try {
+      await cardModel.findByIdAndDelete(card_id);
+      responseReturn(res, 200, {
+        message: "Product removed successfully",
+      });
+    } catch (error) {
+      console.error("💥 Error in cardController: delete_card_product:", error);
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
+
+  async quantity_inc(req, res) {
+    const { card_id } = req.params;
+    // console.log(card_id);
+    if (!mongoose.Types.ObjectId.isValid(card_id)) {
+      return responseReturn(res, 400, { error: "Invalid card ID" });
+    }
+
+    try {
+      const product = await cardModel.findById(card_id);
+      if (!product) {
+        return responseReturn(res, 404, { error: "Product not found in cart" });
+      }
+      const { quantity } = product;
+      await cardModel.findByIdAndUpdate(card_id, { quantity: quantity + 1 });
+      responseReturn(res, 200, {
+        message: "Qty updated successfully",
+      });
+    } catch (error) {
+      console.error("💥 Error in cardController: quantity_inc:", error);
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
 }
 
 module.exports = new cardController();
