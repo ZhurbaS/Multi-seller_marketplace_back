@@ -12,5 +12,6 @@ router.delete(
   cardController.delete_card_product
 );
 router.put("/home/product/quantity-inc/:card_id", cardController.quantity_inc);
+router.put("/home/product/quantity-dec/:card_id", cardController.quantity_dec);
 
 module.exports = router;
