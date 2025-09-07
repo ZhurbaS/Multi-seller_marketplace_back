@@ -3,6 +3,8 @@ const { responseReturn } = require("../../utiles/response");
 const authorOrderModel = require("../../models/authorOrderModel");
 const customerOrderModel = require("../../models/customerOrderModel");
 const cardModel = require("../../models/cardModel");
+const mongoose = require("mongoose");
+const ObjectId = mongoose.Types.ObjectId;
 
 class orderController {
   constructor() {
@@ -117,6 +119,52 @@ class orderController {
       });
     } catch (error) {
       console.error("💥 Error in orderController: place_order:", error);
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
+
+  async get_customer_dashboard_data(req, res) {
+    // console.log(req.params);
+    const { userId } = req.params;
+    try {
+      const recentOrdersLimit =
+        Number(process.env.USER_DASHBOARD_RECENT_ORDERS_LIMIT) || 5;
+      const pipeline = [
+        { $match: { customerId: new ObjectId(userId) } },
+        {
+          $facet: {
+            recentOrders: [
+              { $sort: { createdAt: -1 } },
+              { $limit: recentOrdersLimit },
+            ],
+            totalOrders: [{ $count: "totalOrders" }],
+            pendingOrders: [
+              { $match: { delivery_status: "pending" } },
+              { $count: "pendingOrders" },
+            ],
+            cancelledOrders: [
+              { $match: { delivery_status: "cancelled" } },
+              { $count: "cancelledOrders" },
+            ],
+          },
+        },
+      ];
+
+      const [result] = await customerOrderModel.aggregate(pipeline);
+
+      responseReturn(res, 200, {
+        recentOrders: result.recentOrders,
+        totalOrders: result.totalOrders[0]?.totalOrders || 0,
+        pendingOrders: result.pendingOrders[0]?.pendingOrders || 0,
+        cancelledOrders: result.cancelledOrders[0]?.cancelledOrders || 0,
+      });
+    } catch (error) {
+      console.error(
+        "💥 Error in orderController: get_customer_dashboard_data:",
+        error
+      );
       return responseReturn(res, 500, {
         error: error.message || "Something went wrong",
       });
