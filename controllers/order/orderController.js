@@ -170,6 +170,57 @@ class orderController {
       });
     }
   }
+
+  async get_orders(req, res) {
+    // console.log(req.params);
+    const { customerId, status = "all" } = req.params;
+
+    if (!ObjectId.isValid(customerId)) {
+      return responseReturn(res, 404, { error: "Invalid customerId" });
+    }
+
+    try {
+      let orders = [];
+      if (status !== "all") {
+        orders = await customerOrderModel.find({
+          customerId: new ObjectId(customerId),
+          delivery_status: status,
+        });
+      } else {
+        orders = await customerOrderModel.find({
+          customerId: new ObjectId(customerId),
+        });
+      }
+
+      responseReturn(res, 200, {
+        orders,
+      });
+    } catch (error) {
+      console.error("💥 Error in orderController: get_orders:", error);
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
+
+  async get_orders_details(req, res) {
+    // console.log(req.params);
+
+    const { orderId } = req.params;
+
+    try {
+      const order = await customerOrderModel.findById(orderId);
+
+      responseReturn(res, 200, {
+        order,
+      });
+    } catch (error) {
+      console.error("💥 Error in orderController: get_orders_details:", error);
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
 }
 
 module.exports = new orderController();
