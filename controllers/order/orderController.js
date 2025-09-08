@@ -39,10 +39,8 @@ class orderController {
       price,
       products,
       shipping_fee,
-      items,
       shippingInfo,
       userId,
-      navigate,
     } = req.body;
     let authorOrderData = [];
     let cardProductsId = [];

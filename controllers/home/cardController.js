@@ -5,6 +5,7 @@ const cardModel = require("../../models/cardModel");
 // } = require("mongoose");
 
 const mongoose = require("mongoose");
+const wishlistModel = require("../../models/wishlistModel");
 const ObjectId = mongoose.Types.ObjectId;
 
 class cardController {
@@ -221,6 +222,74 @@ class cardController {
       });
     } catch (error) {
       console.error("💥 Error in cardController: quantity_dec:", error);
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
+
+  async add_wishlist(req, res) {
+    console.log(req.body);
+    const { slug, slugBase } = req.body;
+    try {
+      const product = await wishlistModel.findOne({ slugBase });
+      if (product) {
+        responseReturn(res, 404, {
+          error: "Product is already in widhlist",
+        });
+      } else {
+        await wishlistModel.create(req.body);
+        responseReturn(res, 201, {
+          message: "Product added to wishlist successfully",
+        });
+      }
+    } catch (error) {
+      console.error("💥 Error in cardController: add_wishlist:", error);
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
+
+  async get_wishlist(req, res) {
+    // console.log(req.params);
+    const { userId } = req.params;
+
+    try {
+      const wishlistProducts = await wishlistModel.find({
+        userId: userId,
+      });
+      responseReturn(res, 200, {
+        wishlistCount: wishlistProducts.length,
+        wishlistProducts,
+      });
+    } catch (error) {
+      console.error("💥 Error in cardController: get_wishlist:", error);
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
+
+  async remove_wishlist(req, res) {
+    // console.log(req.params);
+
+    const { wishlistId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(wishlistId)) {
+      return responseReturn(res, 404, { error: "Invalid wishlist item ID" });
+    }
+
+    try {
+      const wishlist = await wishlistModel.findByIdAndDelete(wishlistId);
+      if (!wishlist) {
+        return responseReturn(res, 404, { error: "Wishlist item not found" });
+      }
+      responseReturn(res, 200, {
+        message: "Product removed from wishlist",
+        wishlistId,
+      });
+    } catch (error) {
+      console.error("💥 Error in cardController: remove_wishlist:", error);
       return responseReturn(res, 500, {
         error: error.message || "Something went wrong",
       });
