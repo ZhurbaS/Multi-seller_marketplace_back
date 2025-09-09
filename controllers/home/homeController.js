@@ -152,6 +152,82 @@ class homeController {
       });
     }
   };
+
+  async get_product_details(req, res) {
+    // console.log(req.params);
+
+    const { slug } = req.params;
+
+    if (!slug) {
+      return responseReturn(res, 404, { error: "Invalid product slug" });
+    }
+
+    try {
+      const product = await productModel.findOne({ slug });
+      if (!product) {
+        return responseReturn(res, 404, {
+          error: "Product with such slug was not found",
+        });
+      }
+
+      const category = await categoryModel
+        .findById(product.category)
+        .select("name");
+
+      if (!category) {
+        return responseReturn(res, 404, { error: "Category not found" });
+      }
+      // console.log(category);
+
+      const relatedProducts = await productModel
+        .find({
+          $and: [
+            {
+              _id: {
+                $ne: product.id,
+              },
+            },
+            {
+              category: {
+                $eq: product.category,
+              },
+            },
+          ],
+        })
+        .limit(12);
+
+      const moreProducts = await productModel
+        .find({
+          $and: [
+            {
+              _id: {
+                $ne: product._id,
+              },
+            },
+            {
+              sellerId: {
+                $eq: product.sellerId,
+              },
+            },
+          ],
+        })
+        .limit(3);
+
+      return responseReturn(res, 200, {
+        product,
+        relatedProducts,
+        moreProducts,
+        category,
+      });
+
+      // console.log(product);
+    } catch (error) {
+      console.error("💥 Error in homeController: get_product_details:", error);
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
 }
 
 module.exports = new homeController();
