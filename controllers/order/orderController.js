@@ -35,13 +35,7 @@ class orderController {
 
   async place_order(req, res) {
     // console.log(req.body);
-    const {
-      price,
-      products,
-      shipping_fee,
-      shippingInfo,
-      userId,
-    } = req.body;
+    const { price, products, shipping_fee, shippingInfo, userId } = req.body;
     let authorOrderData = [];
     let cardProductsId = [];
     const tempDate = moment(Date.now()).format("LLL");
@@ -102,12 +96,14 @@ class orderController {
         await cardModel.findByIdAndDelete(cardProductsId[k]);
       }
 
-      setTimeout(() => {
-        const hasItemsInCard = cardProductsId.length > 0; // Перевірка на наявність товарів
-        if (hasItemsInCard) {
-          this.paymentCheck(order.id); // Викликаємо метод paymentCheck тільки якщо є товари в картці
-        } else {
-          console.log("💥 Немає товарів в картці для перевірки оплати.");
+      setTimeout(async () => {
+        try {
+          const orderFromDB = await customerOrderModel.findById(order.id);
+          if (orderFromDB && orderFromDB.payment_status === "unpaid") {
+            await this.paymentCheck(order.id);
+          }
+        } catch (err) {
+          console.error("💥 Error in scheduled payment check:", err);
         }
       }, process.env.ORDER_PAYMENT_CHECK_IN * 60 * 60 * 24 * 1000);
 
