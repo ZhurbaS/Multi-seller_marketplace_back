@@ -132,6 +132,65 @@ class chatController {
       });
     }
   }
+
+  async customer_message_add(req, res) {
+    // console.log(req.body);
+
+    const { userId, sellerId, text, name } = req.body;
+
+    try {
+      const message = await sellerCustomerMessage.create({
+        senderId: userId,
+        senderName: name,
+        receiverId: sellerId,
+        message: text,
+      });
+
+      // for User
+      const data = await sellerCustomerModel.findOne({
+        myId: userId,
+      });
+      let myFriends = data.myFriends;
+      let index = myFriends.findIndex((f) => f.fdId === sellerId);
+      while (index > 0) {
+        let temp = myFriends[index];
+        myFriends[index] = myFriends[index - 1];
+        myFriends[index - 1] = temp;
+        index--;
+      }
+      await sellerCustomerModel.updateOne({ myId: userId }, { myFriends });
+
+      // for Seller
+      const dataForSeller = await sellerCustomerModel.findOne({
+        myId: sellerId,
+      });
+      let myFriendsForSeller = dataForSeller.myFriends;
+      let indexForSeller = myFriendsForSeller.findIndex(
+        (f) => f.fdId === userId
+      );
+      while (indexForSeller > 0) {
+        let tempForSeller = myFriendsForSeller[indexForSeller];
+        myFriendsForSeller[indexForSeller] =
+          myFriendsForSeller[indexForSeller - 1];
+        myFriendsForSeller[indexForSeller - 1] = tempForSeller;
+        indexForSeller--;
+      }
+      await sellerCustomerModel.updateOne(
+        { myId: sellerId },
+        { myFriendsForSeller }
+      );
+
+      return responseReturn(res, 201, { message });
+    } catch (error) {
+      console.error(
+        "💥 Error in chatController: customer_message_add:",
+        error.message
+      );
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
 }
 
 module.exports = new chatController();
