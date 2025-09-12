@@ -191,6 +191,122 @@ class chatController {
       });
     }
   }
+
+  async get_customers(req, res) {
+    // console.log(req.params);
+
+    const { sellerId } = req.params;
+    try {
+      const data = await sellerCustomerModel.findOne({ myId: sellerId });
+
+      return responseReturn(res, 200, { customers: data.myFriends });
+    } catch (error) {
+      console.error(
+        "💥 Error in chatController: get_customers:",
+        error.message
+      );
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
+
+  async get_customers_seller_message(req, res) {
+    // console.log(req.params);
+    const { customerId } = req.params;
+    const { id } = req; // sellerId
+    // console.log(id);
+
+    try {
+      const messages = await sellerCustomerMessage.find({
+        $or: [
+          {
+            $and: [
+              { receiverId: { $eq: customerId } },
+              { senderId: { $eq: id } },
+            ],
+          },
+          {
+            $and: [
+              { receiverId: { $eq: id } },
+              { senderId: { $eq: customerId } },
+            ],
+          },
+        ],
+      });
+
+      const currentCustomer = await customerModel.findById(customerId);
+
+      return responseReturn(res, 200, { currentCustomer, messages });
+    } catch (error) {
+      console.error(
+        "💥 Error in chatController: get_customers_seller_message:",
+        error.message
+      );
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
+
+  async seller_message_add(req, res) {
+    // console.log(req.body);
+
+    const { senderId, receiverId, text, name } = req.body;
+
+    try {
+      const message = await sellerCustomerMessage.create({
+        senderId: senderId,
+        senderName: name,
+        receiverId: receiverId,
+        message: text,
+      });
+
+      // for Seller
+      const data = await sellerCustomerModel.findOne({
+        myId: senderId,
+      });
+      let myFriends = data.myFriends;
+      let index = myFriends.findIndex((f) => f.fdId === receiverId);
+      while (index > 0) {
+        let temp = myFriends[index];
+        myFriends[index] = myFriends[index - 1];
+        myFriends[index - 1] = temp;
+        index--;
+      }
+      await sellerCustomerModel.updateOne({ myId: senderId }, { myFriends });
+
+      // for Customer
+      const dataForCustomer = await sellerCustomerModel.findOne({
+        myId: receiverId,
+      });
+      let myFriendsForCustomer = dataForCustomer.myFriends;
+      let indexForCustomer = myFriendsForCustomer.findIndex(
+        (f) => f.fdId === senderId
+      );
+      while (indexForCustomer > 0) {
+        let tempForCustomer = myFriendsForCustomer[indexForCustomer];
+        myFriendsForCustomer[indexForCustomer] =
+          myFriendsForCustomer[indexForCustomer - 1];
+        myFriendsForCustomer[indexForCustomer - 1] = tempForCustomer;
+        indexForCustomer--;
+      }
+      await sellerCustomerModel.updateOne(
+        { myId: receiverId },
+        { myFriendsForCustomer }
+      );
+
+      return responseReturn(res, 201, { message });
+    } catch (error) {
+      console.error(
+        "💥 Error in chatController: customer_message_add:",
+        error.message
+      );
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
 }
 
 module.exports = new chatController();

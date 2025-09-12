@@ -11,7 +11,11 @@ const server = http.createServer(app);
 
 app.use(
   cors({
-    origin: [`http://localhost:5174`, `http://localhost:5173`],
+    origin: [
+      `http://localhost:5174`,
+      `http://localhost:5173`,
+      `http://localhost:5001`,
+    ],
     credentials: true,
   })
 );
@@ -24,6 +28,8 @@ const io = socket(server, {
 });
 
 var allCustomer = [];
+var allSeller = [];
+
 const addUser = (customerId, socketId, userInfo) => {
   const checkUser = allCustomer.some((u) => u.customerId === customerId);
   if (!checkUser) {
@@ -35,6 +41,25 @@ const addUser = (customerId, socketId, userInfo) => {
   }
 };
 
+const addSeller = (sellerId, socketId, userInfo) => {
+  const checkSeller = allSeller.some((u) => u.sellerId === sellerId);
+  if (!checkSeller) {
+    allSeller.push({
+      sellerId,
+      socketId,
+      userInfo,
+    });
+  }
+};
+
+const findCustomer = (customerId) => {
+  return allCustomer.find((c) => c.customerId === customerId);
+};
+
+const remove = (socketId) => {
+  allCustomer = allCustomer.filter((c) => c.socketId !== socketId);
+};
+
 io.on("connection", (soc) => {
   console.log("✔️  Socket server is running");
 
@@ -42,6 +67,28 @@ io.on("connection", (soc) => {
     // console.log(userInfo);
     addUser(customerId, soc.id, userInfo);
     // console.log(allCustomer);
+    io.emit("activeSeller", allSeller);
+  });
+
+  soc.on("add_seller", (sellerId, userInfo) => {
+    // console.log(sellerId, userInfo);
+    addSeller(sellerId, soc.id, userInfo);
+    io.emit("activeSeller", allSeller);
+  });
+
+  soc.on("send_seller_message", (msg) => {
+    // console.log(msg);
+    const customer = findCustomer(msg.receiverId); // customerId
+    // console.log(customer);
+    if (customer !== undefined) {
+      soc.to(customer.socketId).emit("seller_message", msg);
+    }
+  });
+
+  soc.on("disconnect", () => {
+    console.log("user disconnected");
+    remove(soc.id);
+    io.emit("activeSeller", allSeller);
   });
 });
 
