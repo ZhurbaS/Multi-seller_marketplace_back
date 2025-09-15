@@ -75,17 +75,17 @@ class customerAuthController {
                 process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000
             ),
           });
-          responseReturn(res, 201, {
+          return responseReturn(res, 201, {
             token,
             message: "User login successful",
           });
         } else {
-          responseReturn(res, 404, {
+          return responseReturn(res, 404, {
             error: "Password wrong",
           });
         }
       } else {
-        responseReturn(res, 404, {
+        return responseReturn(res, 404, {
           error: "Email not found",
         });
       }
@@ -99,6 +99,16 @@ class customerAuthController {
       });
     }
   };
+
+  async customer_logout(req, res) {
+    res.cookie("customerToken", "", {
+      expires: new Date(Date.now()),
+    });
+
+    return responseReturn(res, 200, {
+      message: "Logout successful",
+    });
+  }
 }
 
 module.exports = new customerAuthController();

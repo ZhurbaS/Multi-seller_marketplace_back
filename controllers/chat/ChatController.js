@@ -307,6 +307,22 @@ class chatController {
       });
     }
   }
+
+  async get_sellers(req, res) {
+    try {
+      const sellers = await sellerModel.find({});
+      return responseReturn(res, 200, { sellers });
+    } catch (error) {
+      console.error("💥 Error in chatController: get_sellers:", error.message);
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
+
+  async seller_admin_message_insert(req, res) {
+    console.log(req.body);
+  }
 }
 
 module.exports = new chatController();
