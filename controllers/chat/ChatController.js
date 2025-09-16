@@ -6,6 +6,7 @@ const sellerModel = require("../../models/sellerModel");
 const customerModel = require("../../models/customerModel");
 const sellerCustomerModel = require("../../models/chat/sellerCustomerModel");
 const sellerCustomerMessage = require("../../models/chat/sellerCustomerMessage");
+const adminSellerMessage = require("../../models/chat/adminSellerMessage");
 const ObjectId = mongoose.Types.ObjectId;
 
 class chatController {
@@ -321,7 +322,104 @@ class chatController {
   }
 
   async seller_admin_message_insert(req, res) {
-    console.log(req.body);
+    // console.log(req.body);
+
+    const { receiverId, senderId, message, senderName } = req.body;
+    try {
+      const messageData = await adminSellerMessage.create({
+        senderId,
+        receiverId,
+        message,
+        senderName,
+      });
+
+      return responseReturn(res, 200, { message: messageData });
+    } catch (error) {
+      console.error(
+        "💥 Error in chatController: seller_admin_message_insert:",
+        error.message
+      );
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
+
+  async get_admin_messages(req, res) {
+    // console.log(req.params);
+
+    const { receiverId } = req.params;
+    const id = "";
+
+    try {
+      const messages = await adminSellerMessage.find({
+        $or: [
+          {
+            $and: [
+              { receiverId: { $eq: receiverId } },
+              { senderId: { $eq: id } },
+            ],
+          },
+          {
+            $and: [
+              { receiverId: { $eq: id } },
+              { senderId: { $eq: receiverId } },
+            ],
+          },
+        ],
+      });
+
+      let currentSeller = {};
+      if (receiverId) {
+        currentSeller = await sellerModel.findById(receiverId);
+      }
+
+      return responseReturn(res, 200, { currentSeller, messages });
+    } catch (error) {
+      console.error(
+        "💥 Error in chatController: get_admin_messages:",
+        error.message
+      );
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
+
+  async get_seller_messages(req, res) {
+    // console.log(req.params);
+
+    const receiverId = "";
+    const id = req;
+
+    try {
+      const messages = await adminSellerMessage.find({
+        $or: [
+          {
+            $and: [
+              { receiverId: { $eq: receiverId } },
+              { senderId: { $eq: id } },
+            ],
+          },
+          {
+            $and: [
+              { receiverId: { $eq: id } },
+              { senderId: { $eq: receiverId } },
+            ],
+          },
+        ],
+      });
+
+      return responseReturn(res, 200, { messages });
+    } catch (error) {
+      console.error(
+        "💥 Error in chatController: get_seller_messages:",
+        error.message
+      );
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
   }
 }
 
