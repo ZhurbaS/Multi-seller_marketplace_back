@@ -201,6 +201,20 @@ class authControllers {
       });
     }
   };
+
+  async logout(req, res) {
+    try {
+      res.cookie("accessToken", null, {
+        expires: new Date(Date.now()),
+        httpOnly: true,
+      });
+      return responseReturn(res, 200, {
+        message: "Logout successfully 👍",
+      });
+    } catch (error) {
+      return handleError(res, error, "authController → logout");
+    }
+  }
 }
 
 module.exports = new authControllers();
