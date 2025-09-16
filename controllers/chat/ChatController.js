@@ -390,7 +390,7 @@ class chatController {
     // console.log(req.params);
 
     const receiverId = "";
-    const id = req;
+    const id = req.id;
 
     try {
       const messages = await adminSellerMessage.find({
