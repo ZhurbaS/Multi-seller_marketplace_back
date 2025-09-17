@@ -3,6 +3,7 @@ const { responseReturn } = require("../../utiles/response");
 const authorOrderModel = require("../../models/authorOrderModel");
 const customerOrderModel = require("../../models/customerOrderModel");
 const cardModel = require("../../models/cardModel");
+const handleError = require("../../utiles/handleError");
 const mongoose = require("mongoose");
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -214,6 +215,64 @@ class orderController {
         error: error.message || "Something went wrong",
       });
     }
+  }
+
+  async get_admin_orders(req, res) {
+    // console.log(req.query);
+
+    try {
+      let { page = 1, searchValue = "", perPage = 10 } = req.query;
+
+      page = parseInt(page);
+      perPage = parseInt(perPage);
+
+      const skip = perPage * (page - 1);
+
+      if (searchValue) {
+      } else {
+        const orders = await customerOrderModel
+          .aggregate([
+            {
+              $lookup: {
+                from: "authorders",
+                localField: "_id",
+                foreignField: "orderId",
+                as: "suborder",
+              },
+            },
+          ])
+          .skip(skip)
+          .limit(perPage)
+          .sort({ createdAt: -1 });
+
+        const totalOrder = await customerOrderModel.aggregate([
+          {
+            $lookup: {
+              from: "authorders",
+              localField: "_id",
+              foreignField: "orderId",
+              as: "suborder",
+            },
+          },
+        ]);
+
+        // console.log(orders);
+        // console.log(totalOrder);
+        return responseReturn(res, 200, {
+          myOrdersArr: orders,
+          totalOrderCount: totalOrder.length,
+        });
+      }
+    } catch (error) {
+      console.error("❌ orderController → get_admin_orders:", error.message);
+      return handleError(res, error, "orderController → get_admin_orders");
+    }
+  }
+
+  async get_admin_order_details(req, res) {
+    // console.log(req.params);
+
+    
   }
 }
 
