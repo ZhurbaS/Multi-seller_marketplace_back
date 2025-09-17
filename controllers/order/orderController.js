@@ -326,6 +326,93 @@ class orderController {
       );
     }
   }
+
+  async get_seller_orders(req, res) {
+    const { sellerId } = req.params;
+
+    // console.log(sellerId);
+    // console.log(req.query);
+
+    let { page = 1, searchValue = "", perPage = 10 } = req.query;
+    page = parseInt(page);
+    perPage = parseInt(perPage);
+
+    const skip = perPage * (page - 1);
+
+    try {
+      if (searchValue) {
+      } else {
+        const orders = await authorOrderModel
+          .find({
+            sellerId,
+          })
+          .skip(skip)
+          .limit(perPage)
+          .sort({ createdAt: -1 });
+
+        const totalOrder = await authorOrderModel
+          .find({ sellerId })
+          .countDocuments();
+
+        return responseReturn(res, 200, {
+          myOrdersArr: orders,
+          totalOrderCount: totalOrder,
+        });
+      }
+    } catch (error) {
+      console.error("❌ orderController → get_seller_orders:", error.message);
+      return handleError(res, error, "orderController → get_seller_orders");
+    }
+  }
+
+  async get_seller_order_details(req, res) {
+    const { orderId } = req.params;
+    // console.log(orderId);
+
+    try {
+      const order = await authorOrderModel.findById(orderId);
+
+      return responseReturn(res, 200, { order });
+    } catch (error) {
+      console.error(
+        "❌ orderController → get_seller_order_details:",
+        error.message
+      );
+      return handleError(
+        res,
+        error,
+        "orderController → get_seller_order_details"
+      );
+    }
+  }
+
+  async seller_order_status_update(req, res) {
+    const { orderId } = req.params;
+    const { status } = req.body;
+
+    // console.log(orderId);
+    // console.log(status);
+
+    try {
+      await authorOrderModel.findByIdAndUpdate(orderId, {
+        delivery_status: status,
+      });
+
+      return responseReturn(res, 200, {
+        message: "Статус замовлення успішно змінено",
+      });
+    } catch (error) {
+      console.error(
+        "❌ orderController → seller_order_status_update:",
+        error.message
+      );
+      return handleError(
+        res,
+        error,
+        "orderController → seller_order_status_update"
+      );
+    }
+  }
 }
 
 module.exports = new orderController();
