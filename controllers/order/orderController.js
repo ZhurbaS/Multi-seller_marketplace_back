@@ -271,8 +271,60 @@ class orderController {
 
   async get_admin_order_details(req, res) {
     // console.log(req.params);
+    const { orderId } = req.params;
 
-    
+    try {
+      const order = await customerOrderModel.aggregate([
+        { $match: { _id: new ObjectId(orderId) } },
+        {
+          $lookup: {
+            from: "authorders",
+            localField: "_id",
+            foreignField: "orderId",
+            as: "suborder",
+          },
+        },
+      ]);
+      return responseReturn(res, 200, { order: order[0] });
+    } catch (error) {
+      console.error(
+        "❌ orderController → get_admin_order_details:",
+        error.message
+      );
+      return handleError(
+        res,
+        error,
+        "orderController → get_admin_order_details"
+      );
+    }
+  }
+
+  async admin_order_status_update(req, res) {
+    const { orderId } = req.params;
+    const { status } = req.body;
+
+    // console.log(orderId);
+    // console.log(status);
+
+    try {
+      await customerOrderModel.findByIdAndUpdate(orderId, {
+        delivery_status: status,
+      });
+
+      return responseReturn(res, 200, {
+        message: "Статус замовлення успішно змінено",
+      });
+    } catch (error) {
+      console.error(
+        "❌ orderController → admin_order_status_update:",
+        error.message
+      );
+      return handleError(
+        res,
+        error,
+        "orderController → admin_order_status_update"
+      );
+    }
   }
 }
 

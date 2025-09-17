@@ -19,6 +19,10 @@ router.get(
 // Admin
 router.get("/admin/orders", orderController.get_admin_orders);
 router.get("/admin/order/:orderId", orderController.get_admin_order_details);
+router.put(
+  "/admin/order-status/update/:orderId",
+  orderController.admin_order_status_update
+);
 
 // Seller
 
