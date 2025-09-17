@@ -48,4 +48,21 @@ const sellerSchema = new Schema(
   { timestamps: true }
 );
 
+sellerSchema.index(
+  {
+    name: "text",
+    email: "text",
+  },
+  {
+    weights: {
+      name: 5,
+      email: 4,
+    },
+  }
+);
+
+// Звичайні індекси для ефективного $regex пошуку
+sellerSchema.index({ name: 1 });
+sellerSchema.index({ email: 1 });
+
 module.exports = model("sellers", sellerSchema);

@@ -72,6 +72,43 @@ class sellerController {
       });
     }
   };
+
+  async get_active_sellers(req, res) {
+    // console.log(req.query);
+    try {
+      let { page = 1, searchValue = "", perPage = 10 } = req.query;
+
+      page = parseInt(page);
+      perPage = parseInt(perPage);
+
+      const skip = perPage * (page - 1);
+
+      const filter = { status: "active" };
+
+      // Додаємо текстовий пошук, якщо є значення
+      if (searchValue.trim()) {
+        filter.$or = [
+          { name: { $regex: searchValue.trim(), $options: "i" } },
+          { email: { $regex: searchValue.trim(), $options: "i" } },
+        ];
+      }
+
+      const [sellers, totalSeller] = await Promise.all([
+        sellerModel
+          .find(filter)
+          .skip(skip)
+          .limit(perPage)
+          .sort({ createdAt: -1 }),
+
+        sellerModel.countDocuments(filter),
+      ]);
+
+      return responseReturn(res, 200, { sellers, totalSeller });
+    } catch (error) {
+      console.error("❌ sellerController → get_active_sellers:", error.message);
+      return handleError(res, error, "sellerController → get_active_sellers");
+    }
+  }
 }
 
 module.exports = new sellerController();
