@@ -1,9 +1,11 @@
+// require("dotenv").config();
 const moment = require("moment");
 const { responseReturn } = require("../../utiles/response");
 const authorOrderModel = require("../../models/authorOrderModel");
 const customerOrderModel = require("../../models/customerOrderModel");
 const cardModel = require("../../models/cardModel");
 const handleError = require("../../utiles/handleError");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const mongoose = require("mongoose");
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -411,6 +413,28 @@ class orderController {
         error,
         "orderController → seller_order_status_update"
       );
+    }
+  }
+
+  async create_payment(req, res) {
+    // console.log("Received body:", req.body);
+
+    const { price } = req.body;
+    try {
+      const payment = await stripe.paymentIntents.create({
+        amount: price * 100,
+        currency: "usd",
+        automatic_payment_methods: {
+          enabled: true,
+        },
+      });
+
+      // console.log("PaymentIntent created:", payment);
+
+      responseReturn(res, 200, { clientSecret: payment.client_secret });
+    } catch (error) {
+      console.log("Stripe error:", error.message);
+      responseReturn(res, 500, { error: error.message });
     }
   }
 }
