@@ -3,6 +3,8 @@ const moment = require("moment");
 const { responseReturn } = require("../../utiles/response");
 const authorOrderModel = require("../../models/authorOrderModel");
 const customerOrderModel = require("../../models/customerOrderModel");
+const myShopWallet = require("../../models/myShopWallet");
+const sellerWallet = require("../../models/sellerWallet");
 const cardModel = require("../../models/cardModel");
 const handleError = require("../../utiles/handleError");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
@@ -456,9 +458,29 @@ class orderController {
       const authOrder = await authorOrderModel.find({
         orderId: new ObjectId(orderId),
       });
-      const time = moment(Date.now()).format("l");
+      const time = moment(Date.now()).format("l"); // m/d/year
       const splitTime = time.split("/");
-    } catch (error) {}
+
+      await myShopWallet.create({
+        amount: custOrder.price,
+        month: splitTime[0],
+        year: splitTime[2],
+      });
+
+      for (let i = 0; i < authOrder.length; i++) {
+        await sellerWallet.create({
+          sellerId: authOrder[i].sellerId.toString(),
+          amount: authOrder[i].price,
+          month: splitTime[0],
+          year: splitTime[2],
+        });
+      }
+
+      responseReturn(res, 200, { message: "Успішно" });
+    } catch (error) {
+      console.error("❌ orderController → order_confirm:", error.message);
+      return handleError(res, error, "orderController → order_confirm");
+    }
   }
 }
 
