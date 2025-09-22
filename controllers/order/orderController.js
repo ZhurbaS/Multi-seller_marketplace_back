@@ -437,6 +437,29 @@ class orderController {
       responseReturn(res, 500, { error: error.message });
     }
   }
+
+  async order_confirm(req, res) {
+    const { orderId } = req.params;
+    // console.log(orderId);
+
+    try {
+      await customerOrderModel.findByIdAndUpdate(orderId, {
+        payment_status: "paid",
+      });
+      await authorOrderModel.updateMany(
+        {
+          orderId: new ObjectId(orderId),
+        },
+        { payment_status: "paid", delivery_status: "pending" }
+      );
+      const custOrder = await customerOrderModel.findById(orderId);
+      const authOrder = await authorOrderModel.find({
+        orderId: new ObjectId(orderId),
+      });
+      const time = moment(Date.now()).format("l");
+      const splitTime = time.split("/");
+    } catch (error) {}
+  }
 }
 
 module.exports = new orderController();
