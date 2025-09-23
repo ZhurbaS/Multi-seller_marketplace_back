@@ -425,7 +425,8 @@ class orderController {
     try {
       const payment = await stripe.paymentIntents.create({
         amount: price * 100,
-        currency: "usd",
+        currency: "eur",
+
         automatic_payment_methods: {
           enabled: true,
         },

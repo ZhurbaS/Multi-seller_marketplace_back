@@ -7,6 +7,10 @@ const stripeModel = require("../../models/stripeModel");
 const sellerModel = require("../../models/sellerModel");
 const sellerWallet = require("../../models/sellerWallet");
 const withdrawalRequest = require("../../models/withdrawalRequest");
+
+const mongoose = require("mongoose");
+const ObjectId = mongoose.Types.ObjectId;
+
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 class paymentController {
@@ -161,6 +165,62 @@ class paymentController {
       });
     } catch (error) {
       return handleError(res, error, "paymentController → withdrawal_request");
+    }
+  }
+
+  async get_payment_requests(req, res) {
+    try {
+      const withdrawalRequestsArr = await withdrawalRequest.find({
+        status: "pending",
+      });
+      return responseReturn(res, 200, { withdrawalRequestsArr });
+    } catch (error) {
+      return handleError(
+        res,
+        error,
+        "paymentController → get_payment_requests"
+      );
+    }
+  }
+
+  async payment_request_confirm(req, res) {
+    const { paymentId } = req.body;
+    // console.log(paymentId);
+
+    try {
+      const payment = await withdrawalRequest.findById(paymentId);
+      const { stripeId } = await stripeModel.findOne({
+        sellerId: new ObjectId(payment.sellerId),
+      });
+
+      // ✅ КРОК 1: Створення тестового платежу через Charge (поповнює баланс платформи)
+      // await stripe.charges.create({
+      //   amount: payment.amount * 100 * 1000,
+      //   currency: "eur",
+      //   source: "tok_bypassPending", // 🔁 Тестовий токен, що імітує картку 4000000000000077
+      // });
+
+      await stripe.transfers.create({
+        amount: payment.amount * 100,
+        currency: "eur",
+
+        destination: stripeId,
+      });
+
+      await withdrawalRequest.findByIdAndUpdate(paymentId, {
+        status: "success",
+      });
+
+      return responseReturn(res, 200, {
+        payment,
+        message: "Запит успішно підтверджено",
+      });
+    } catch (error) {
+      return handleError(
+        res,
+        error,
+        "paymentController → payment_request_confirm"
+      );
     }
   }
 }
