@@ -16,6 +16,7 @@ const allowedOrigins = [
   "http://localhost:5174",
   "http://localhost:5000",
   "http://localhost:5001",
+  "http://localhost:5002",
 ];
 
 app.use(bodyParser.json());
@@ -221,6 +222,7 @@ app.use("/api", require("./routes/dashboard/sellerRoutes"));
 app.use("/api", require("./routes/home/customerAuthRoutes"));
 app.use("/api", require("./routes/chatRoutes"));
 app.use("/api", require("./routes/paymentRoutes"));
+app.use("/api", require("./routes/dashboard/dashboardRoutes"));
 
 app.get("/", (req, res) => res.send("My backend"));
 
