@@ -10,7 +10,18 @@ const handleError = require("../../utiles/handleError");
 const adminSellerMessage = require("../../models/chat/adminSellerMessage");
 const sellerCustomerMessage = require("../../models/chat/sellerCustomerMessage");
 
+const { IncomingForm } = require("formidable");
+const cloudinary = require("cloudinary").v2;
+
+cloudinary.config({
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.API_KEY,
+  api_secret: process.env.API_SECRET,
+  secure: true,
+});
+
 const mongoose = require("mongoose");
+const bannerModel = require("../../models/bannerModel");
 const ObjectId = mongoose.Types.ObjectId;
 
 class dashboardController {
@@ -101,6 +112,120 @@ class dashboardController {
         "paymentController → get_seller_dashboard_data"
       );
     }
+  }
+
+  async add_banner(req, res) {
+    const form = new IncomingForm({
+      multiples: true,
+      keepExtensions: true,
+      allowEmptyFiles: false,
+      maxFileSize: parseInt(process.env.MAX_FILE_SIZE) * 1024 * 1024,
+    });
+
+    form.parse(req, async (err, field, files) => {
+      const productIdRaw = field.productId;
+      const productId = Array.isArray(productIdRaw)
+        ? productIdRaw[0]
+        : productIdRaw;
+      const mainbanRaw = files.mainban;
+      const mainban = Array.isArray(mainbanRaw) ? mainbanRaw[0] : mainbanRaw;
+      if (err) {
+        return responseReturn(res, 400, { error: "😢 Parse error" });
+      }
+      if (!productId || !mainban) {
+        return responseReturn(res, 400, {
+          error: "ProductId and image are required",
+        });
+      }
+      if (!mainban.filepath) {
+        return responseReturn(res, 400, {
+          error: "No valid banner file provided",
+        });
+      }
+      // console.log(productIdRaw);
+      // console.log(mainbanRaw);
+      // console.log(productId);
+      // console.log(mainban);
+
+      try {
+        const { slug } = await productModel.findById(productId);
+        const result = await cloudinary.uploader.upload(mainban.filepath, {
+          folder: "banners",
+        });
+
+        if (!result || !result.url) {
+          return responseReturn(res, 500, {
+            error: "Помилка завантаження банера",
+          });
+        }
+
+        const banner = await bannerModel.create({
+          productId: productId,
+          banner: result.url,
+          link: slug,
+        });
+        responseReturn(res, 200, {
+          banner,
+          message: "Банер додано успішно",
+        });
+      } catch (error) {
+        return handleError(res, error, "bannerController → add_banner");
+      }
+    });
+  }
+
+  async get_banner(req, res) {
+    const { productId } = req.params;
+
+    // console.log(productId);
+
+    try {
+      const banner = await bannerModel.findOne({
+        productId: new ObjectId(productId),
+      });
+      responseReturn(res, 200, { banner });
+    } catch (error) {
+      return handleError(res, error, "bannerController → get_banner");
+    }
+  }
+
+  async update_banner(req, res) {
+    const { bannerId } = req.params;
+    // const { info } = req.body;
+    console.log(bannerId);
+    // console.log(info);
+
+    const form = new IncomingForm({
+      multiples: true,
+      keepExtensions: true,
+      allowEmptyFiles: false,
+      maxFileSize: parseInt(process.env.MAX_FILE_SIZE) * 1024 * 1024,
+    });
+
+    form.parse(req, async (err, _, files) => {
+      const {mainbanRaw} = files;
+      const mainban = Array.isArray(mainbanRaw)
+        ? mainbanRaw[0]
+        : mainbanRaw;
+      if (err) {
+        return responseReturn(res, 400, { error: "😢 Parse error" });
+      }
+      if (!mainban) {
+        return responseReturn(res, 400, {
+          error: "Mainban is required",
+        });
+      }
+      if (!mainban.filepath) {
+        return responseReturn(res, 400, {
+          error: "No valid banner file provided",
+        });
+      }
+      try {
+        let banner = await bannerModel.findAnd
+      } catch (error) {
+        
+      }
+
   }
 }
 
