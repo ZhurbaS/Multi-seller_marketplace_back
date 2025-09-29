@@ -48,6 +48,10 @@ class authControllers {
   }
 
   seller_login = async (req, res) => {
+
+
+
+    
     const { email, password } = req.body;
     try {
       const seller = await sellerModel.findOne({ email }).select("+password");
@@ -214,6 +218,36 @@ class authControllers {
       });
     } catch (error) {
       return handleError(res, error, "authController → logout");
+    }
+  }
+
+  async change_password(req, res) {
+    const { email, old_password, new_password } = req.body;
+    // console.log(`Password change requested for ${email}`);
+
+    try {
+      const user = await sellerModel.findOne({ email }).select("+password");
+      if (!user)
+        return res
+          .status(404)
+          .json({ message: `Користувача ${email} не знайдено` });
+
+      const isMatch = await bcrypt.compare(old_password, user.password);
+      if (!isMatch)
+        return res.status(400).json({ message: `Старий пароль невірний` });
+
+      if (old_password === new_password) {
+        return res
+          .status(400)
+          .json({ message: "Новий пароль не може співпадати зі старим" });
+      }
+
+      const saltRounds = parseInt(process.env.SALT_ROUNDS) || 10;
+      user.password = await bcrypt.hash(new_password, saltRounds);
+      await user.save();
+      res.json({ message: "Пароль змінений успішно" });
+    } catch (error) {
+      return handleError(res, error, "authController → change_password");
     }
   }
 }
