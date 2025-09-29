@@ -192,7 +192,7 @@ class dashboardController {
   async update_banner(req, res) {
     const { bannerId } = req.params;
     // const { info } = req.body;
-    console.log(bannerId);
+    // console.log(bannerId);
     // console.log(info);
 
     const form = new IncomingForm({
@@ -203,10 +203,9 @@ class dashboardController {
     });
 
     form.parse(req, async (err, _, files) => {
-      const {mainbanRaw} = files;
-      const mainban = Array.isArray(mainbanRaw)
-        ? mainbanRaw[0]
-        : mainbanRaw;
+      let { mainban } = files;
+      mainban = Array.isArray(mainban) ? mainban[0] : mainban;
+      // console.log(mainban);
       if (err) {
         return responseReturn(res, 400, { error: "😢 Parse error" });
       }
@@ -221,11 +220,37 @@ class dashboardController {
         });
       }
       try {
-        let banner = await bannerModel.findAnd
-      } catch (error) {
-        
-      }
+        let banner = await bannerModel.findById(bannerId);
+        // console.log(banner);
+        let temp = banner.banner.split("/");
+        temp = temp[temp.length - 1];
+        const imageName = temp.split(".")[0];
+        await cloudinary.uploader.destroy(imageName);
 
+        const { url } = await cloudinary.uploader.upload(mainban.filepath, {
+          folder: "banners",
+        });
+
+        await bannerModel.findByIdAndUpdate(bannerId, { banner: url });
+
+        banner = await bannerModel.findById(bannerId);
+        return responseReturn(res, 200, {
+          banner,
+          message: "Банер оновлено успішно",
+        });
+      } catch (error) {
+        return handleError(res, error, "bannerController → update_banner");
+      }
+    });
+  }
+
+  async get_banners(req, res) {
+    try {
+      const banners = await bannerModel.aggregate([{ $sample: { size: 5 } }]);
+      responseReturn(res, 200, { banners });
+    } catch (error) {
+      return handleError(res, error, "bannerController → get_banners");
+    }
   }
 }
 
