@@ -4,6 +4,7 @@ const cloudinary = require("cloudinary").v2;
 const categoryModel = require("../../models/categoryModel");
 const slugify = require("slugify");
 const { nanoid } = require("nanoid");
+const handleError = require("../../utiles/handleError");
 
 cloudinary.config({
   cloud_name: process.env.CLOUD_NAME,
@@ -85,6 +86,7 @@ class categoryController {
       }
     });
   };
+
   get_category = async (req, res) => {
     const { page, searchValue, perPage } = req.query;
 
@@ -126,7 +128,74 @@ class categoryController {
       responseReturn(res, 500, { error: "Internal server error" });
     }
   };
-  
+
+  update_category = async (req, res) => {
+    const form = new IncomingForm();
+    form.parse(req, async (err, fields, files) => {
+      if (err) {
+        return responseReturn(res, 400, { error: "😢 Parse error" });
+      }
+
+      let { name } = fields;
+      name = Array.isArray(name) ? name[0] : name;
+
+      let { image } = files;
+      image = Array.isArray(image) ? image[0] : image;
+
+      const { id } = req.params;
+
+      name = name.trim();
+      const slugBase = slugify(name, {
+        lower: true,
+        strict: true,
+        locale: "uk",
+      });
+      const slug = `${slugBase}-${nanoid(6)}`;
+
+      try {
+        let result = null;
+        if (image) {
+          result = await cloudinary.uploader.upload(image.filepath, {
+            folder: "categories",
+          });
+        }
+
+        const updateData = { name, slug, slugBase };
+
+        if (result) {
+          updateData.image = result.secure_url;
+          updateData.imageId = result.public_id;
+        }
+
+        const category = await categoryModel.findByIdAndUpdate(id, updateData, {
+          new: true,
+        });
+        return responseReturn(res, 200, {
+          category,
+          message: "Категорія оновлена успішно 🫡",
+        });
+      } catch (error) {
+        console.error("❌ Error in update_category:", error);
+        return handleError(res, error, "categoryController → update_category");
+      }
+    });
+  };
+
+  async deleteCategory(req, res) {
+    try {
+      const categoryId = req.params.id;
+      const deleteCategory = await categoryModel.findByIdAndDelete(categoryId);
+
+      if (!deleteCategory) {
+        console.log(`Категорія з ID ${categoryId} не знайдена`);
+        return res.status(404).json({ message: "Категорія не знайдена" });
+      }
+      return res.status(200).json({ message: "Категорія видалена успішно" });
+    } catch (error) {
+      // console.error("❌ Error in deleteCategory:", error);
+      return handleError(res, error, "categoryController → deleteCategory");
+    }
+  }
 }
 
 module.exports = new categoryController();

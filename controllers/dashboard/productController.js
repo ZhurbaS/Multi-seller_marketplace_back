@@ -141,33 +141,6 @@ class productController {
     const skipPage = perPageNum * (pageNum - 1);
 
     try {
-      // if (searchValue) {
-      //   const products = await productModel
-      //     .find({
-      //       $text: { $search: searchValue },
-      //       sellerId: id,
-      //     })
-      //     .skip(skipPage)
-      //     .limit(parseInt(perPage))
-      //     .sort({ createdAt: -1 });
-      //   const totalProduct = await productModel
-      //     .find({
-      //       $text: { $search: searchValue },
-      //       sellerId: id,
-      //     })
-      //     .countDocuments();
-      //   responseReturn(res, 200, { products, totalProduct });
-      // } else {
-      //   const products = await productModel
-      //     .find({ sellerId: id })
-      //     .skip(skipPage)
-      //     .limit(parseInt(perPage))
-      //     .sort({ createdAt: -1 });
-      //   const totalProduct = await productModel
-      //     .find({ sellerId: id })
-      //     .countDocuments();
-      //   responseReturn(res, 200, { products, totalProduct });
-      // }
       const filter = searchValue
         ? { $text: { $search: searchValue }, sellerId: id }
         : { sellerId: id };
@@ -194,7 +167,6 @@ class productController {
     const { productId } = req.params;
     // console.log(productId);
     try {
-      // const product = await productModel.findById(productId);
       const product = await productModel
         .findById(productId)
         .populate("category");
@@ -210,59 +182,6 @@ class productController {
       });
     }
   };
-
-  // product_update = async (req, res) => {
-  //   try {
-  //     let { name, description, stock, discount, brand, price, productId } =
-  //       req.body;
-
-  //     if (!productId) {
-  //       return responseReturn(res, 400, { error: "Product ID is required" });
-  //     }
-  //     if (!name) {
-  //       return responseReturn(res, 400, { error: "Name is required" });
-  //     }
-
-  //     name = name.trim();
-
-  //     const slugBase = slugify(name, {
-  //       lower: true,
-  //       strict: true,
-  //       locale: "uk",
-  //     });
-
-  //     const slug = `${slugBase}-${nanoid(6)}`;
-
-  //     const product = await productModel.findByIdAndUpdate(
-  //       productId,
-  //       {
-  //         name,
-  //         description,
-  //         stock,
-  //         discount,
-  //         brand,
-  //         price,
-  //         slug,
-  //         slugBase,
-  //       },
-  //       { new: true } // одразу повертає оновлений об’єкт
-  //     );
-
-  //     if (!product) {
-  //       return responseReturn(res, 404, { error: "Product not found" });
-  //     }
-
-  //     responseReturn(res, 200, {
-  //       product,
-  //       message: "Product updated successfully 🫡",
-  //     });
-  //   } catch (error) {
-  //     console.error("❌ Error in product_update:", error);
-  //     responseReturn(res, 500, {
-  //       error: error.message || "Something went wrong",
-  //     });
-  //   }
-  // };
 
   product_update = async (req, res) => {
     try {
@@ -305,11 +224,6 @@ class productController {
         slug,
         slugBase,
       };
-
-      // Якщо прислали category, оновлюємо її
-      // if (category) {
-      //   updateData.category = category.trim();
-      // }
 
       if (category) {
         updateData.category = category; // просто _id
