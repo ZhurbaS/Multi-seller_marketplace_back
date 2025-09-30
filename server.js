@@ -11,13 +11,16 @@ const { dbConnect } = require("./utiles/db");
 const app = express();
 const server = http.createServer(app);
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:5174",
-  "http://localhost:5000",
-  "http://localhost:5001",
-  "http://localhost:5002",
-];
+const allowedOrigins =
+  process.env.NODE_ENV === "production"
+    ? [process.env.client_admin_production_url]
+    : [
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5000",
+        "http://localhost:5001",
+        "http://localhost:5002",
+      ];
 
 app.use(bodyParser.json());
 app.use(cookieParser());
@@ -35,22 +38,6 @@ app.options("/api/order/create-payment", (req, res) => {
   }
 });
 
-// app.options(
-//   "/api/order/create-payment",
-//   cors({
-//     origin: function (origin, callback) {
-//       if (!origin || allowedOrigins.includes(origin)) {
-//         callback(null, true);
-//       } else {
-//         callback(new Error("Not allowed by CORS"));
-//       }
-//     },
-//     credentials: true,
-//     methods: ["POST", "OPTIONS"],
-//     allowedHeaders: ["Content-Type", "Authorization"],
-//   })
-// );
-
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -63,30 +50,6 @@ app.use(
     credentials: true,
   })
 );
-
-// CORS для REST
-// app.use(
-//   cors({
-//     origin: function (origin, callback) {
-//       // дозволяємо preflight (null origin) і дозволені домени
-//       if (!origin || allowedOrigins.includes(origin)) {
-//         callback(null, true); // Додається Access-Control-Allow-Credentials
-//       } else {
-//         callback(null, false); // Не кидаємо помилку, браузер просто блокує
-//       }
-//     },
-//     credentials: true,
-//     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-//     allowedHeaders: ["Content-Type", "Authorization"],
-//   })
-// );
-
-// const io = socket(server, {
-//   cors: {
-//     origin: ["http://localhost:5173", "http://localhost:5174"],
-//     credentials: true,
-//   },
-// });
 
 // CORS для Socket.IO
 const io = socket(server, {
@@ -203,14 +166,6 @@ io.on("connection", (soc) => {
     io.emit("activeSeller", allSeller);
   });
 });
-
-// console.log("Registering /api/order/create-payment-test route");
-
-// app.post("/api/order/create-payment-test", (req, res) => {
-//   console.log("✅ POST /api/order/create-payment-test hit");
-//   console.log("Body:", req.body);
-//   res.json({ ok: true, clientSecret: "test-secret" });
-// });
 
 app.use("/api/home", require("./routes/home/homeRoutes"));
 app.use("/api", require("./routes/authRoutes"));

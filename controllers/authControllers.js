@@ -48,10 +48,6 @@ class authControllers {
   }
 
   seller_login = async (req, res) => {
-
-
-
-    
     const { email, password } = req.body;
     try {
       const seller = await sellerModel.findOne({ email }).select("+password");
@@ -91,10 +87,11 @@ class authControllers {
       if (getUser) {
         responseReturn(res, 404, { error: "Email Already Exists..." });
       } else {
+        const saltRounds = parseInt(process.env.SALT_ROUNDS) || 10;
         const seller = await sellerModel.create({
           name,
           email,
-          password: await bcrypt.hash(password, 10),
+          password: await bcrypt.hash(password, saltRounds),
           method: "menualy",
           shopInfo: {},
         });
