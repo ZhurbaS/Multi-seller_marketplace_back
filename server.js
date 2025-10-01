@@ -13,7 +13,10 @@ const server = http.createServer(app);
 
 const allowedOrigins =
   process.env.NODE_ENV === "production"
-    ? [client_customer_production_url, client_admin_production_url]
+    ? [
+        process.env.client_customer_production_url,
+        process.env.client_admin_production_url,
+      ]
     : [
         "http://localhost:5173",
         "http://localhost:5174",
