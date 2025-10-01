@@ -30,10 +30,10 @@ class authControllers {
             role: admin.role,
           });
           res.cookie("accessToken", token, {
-            expires: new Date(
-              Date.now() +
-                process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000
-            ),
+            httpOnly: true,
+            secure: true,
+            sameSite: "none",
+            maxAge: process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
           });
           responseReturn(res, 200, { token, message: "Login Success" });
         } else {
@@ -61,10 +61,10 @@ class authControllers {
             role: seller.role,
           });
           res.cookie("accessToken", token, {
-            expires: new Date(
-              Date.now() +
-                process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000
-            ),
+            httpOnly: true,
+            secure: true,
+            sameSite: "none",
+            maxAge: process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
           });
           responseReturn(res, 200, { token, message: "Login Success ✔️" });
         } else {
