@@ -13,10 +13,7 @@ const server = http.createServer(app);
 
 const allowedOrigins =
   process.env.NODE_ENV === "production"
-    ? [
-        `https://multi-seller-marketplace-front-arg6gnfvk.vercel.app`,
-        `https://multi-seller-marketplace-dashboard.vercel.app`,
-      ]
+    ? [client_customer_production_url, client_admin_production_url]
     : [
         "http://localhost:5173",
         "http://localhost:5174",
@@ -44,6 +41,8 @@ app.options("/api/order/create-payment", (req, res) => {
 app.use(
   cors({
     origin: function (origin, callback) {
+      console.log("🌍 Incoming Origin:", origin);
+      console.log("✅ Allowed Origins:", allowedOrigins);
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
