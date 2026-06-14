@@ -1,24 +1,24 @@
-const { responseReturn } = require("../../utiles/response");
-const customerModel = require("../../models/customerModel");
-const bcrypt = require("bcrypt");
-const sellerCustomerModel = require("../../models/chat/sellerCustomerModel");
-const { createToken } = require("../../utiles/tokenCreate");
+const { responseReturn } = require('../../utiles/response');
+const customerModel = require('../../models/customerModel');
+const bcrypt = require('bcrypt');
+const sellerCustomerModel = require('../../models/chat/sellerCustomerModel');
+const { createToken } = require('../../utiles/tokenCreate');
 
 class customerAuthController {
   customer_register = async (req, res) => {
-    console.log(req.body);
+    // console.log(req.body);
     const { name, email, phone, password } = req.body;
     try {
       const customer = await customerModel.findOne({ email });
       if (customer) {
-        return responseReturn(res, 404, { error: "Email already exists" });
+        return responseReturn(res, 404, { error: 'Email already exists' });
       } else {
         const createdCustomer = await customerModel.create({
           name: name.trim(),
           email: email.trim(),
           phone: phone.trim(),
           password: await bcrypt.hash(password, 10),
-          method: "menualy",
+          method: 'manually',
         });
         await sellerCustomerModel.create({
           myId: createdCustomer.id,
@@ -31,23 +31,24 @@ class customerAuthController {
           method: createdCustomer.method,
         });
 
-        res.cookie("customerToken", token, {
+        res.cookie('customerToken', token, {
           expires: new Date(
-            Date.now() + process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000
+            Date.now() +
+              process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
           ),
         });
         responseReturn(res, 200, {
           token,
-          message: "User registration successful",
+          message: 'User registration successful',
         });
       }
     } catch (error) {
       console.error(
-        "💥 Error in customerAuthController: customer_register:",
-        error
+        '💥 Error in customerAuthController: customer_register:',
+        error,
       );
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || 'Something went wrong',
       });
     }
   };
@@ -58,7 +59,7 @@ class customerAuthController {
     try {
       const customer = await customerModel
         .findOne({ email })
-        .select("+password");
+        .select('+password');
       if (customer) {
         const match = await bcrypt.compare(password, customer.password);
         if (match) {
@@ -69,44 +70,44 @@ class customerAuthController {
             phone: customer.phone,
             method: customer.method,
           });
-          res.cookie("customerToken", token, {
+          res.cookie('customerToken', token, {
             expires: new Date(
               Date.now() +
-                process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000
+                process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
             ),
           });
           return responseReturn(res, 201, {
             token,
-            message: "User login successful",
+            message: 'User login successful',
           });
         } else {
           return responseReturn(res, 404, {
-            error: "Password wrong",
+            error: 'Password wrong',
           });
         }
       } else {
         return responseReturn(res, 404, {
-          error: "Email not found",
+          error: 'Email not found',
         });
       }
     } catch (error) {
       console.error(
-        "💥 Error in customerAuthController: customer_login:",
-        error
+        '💥 Error in customerAuthController: customer_login:',
+        error,
       );
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || 'Something went wrong',
       });
     }
   };
 
   async customer_logout(req, res) {
-    res.cookie("customerToken", "", {
+    res.cookie('customerToken', '', {
       expires: new Date(Date.now()),
     });
 
     return responseReturn(res, 200, {
-      message: "Logout successful",
+      message: 'Logout successful',
     });
   }
 }

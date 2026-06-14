@@ -1,12 +1,12 @@
-const adminModel = require("../models/adminModel");
-const sellerModel = require("../models/sellerModel");
-const sellerCustomerModel = require("../models/chat/sellerCustomerModel");
-const { responseReturn } = require("../utiles/response");
-const bcrypt = require("bcrypt");
-const { createToken } = require("../utiles/tokenCreate");
-const { IncomingForm } = require("formidable");
-const handleError = require("../utiles/handleError");
-const cloudinary = require("cloudinary").v2;
+const adminModel = require('../models/adminModel');
+const sellerModel = require('../models/sellerModel');
+const sellerCustomerModel = require('../models/chat/sellerCustomerModel');
+const { responseReturn } = require('../utiles/response');
+const bcrypt = require('bcrypt');
+const { createToken } = require('../utiles/tokenCreate');
+const { IncomingForm } = require('formidable');
+const handleError = require('../utiles/handleError');
+const cloudinary = require('cloudinary').v2;
 
 cloudinary.config({
   cloud_name: process.env.CLOUD_NAME,
@@ -19,7 +19,7 @@ class authControllers {
   async admin_login(req, res) {
     const { email, password } = req.body;
     try {
-      const admin = await adminModel.findOne({ email }).select("+password");
+      const admin = await adminModel.findOne({ email }).select('+password');
       // console.log(admin);
       if (admin) {
         const match = await bcrypt.compare(password, admin.password);
@@ -29,18 +29,18 @@ class authControllers {
             id: admin.id,
             role: admin.role,
           });
-          res.cookie("accessToken", token, {
+          res.cookie('accessToken', token, {
             httpOnly: true,
             secure: true,
-            sameSite: "none",
+            sameSite: 'none',
             maxAge: process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
           });
-          responseReturn(res, 200, { token, message: "Login Success" });
+          responseReturn(res, 200, { token, message: 'Login Success' });
         } else {
-          responseReturn(res, 404, { error: "Password is wrong! Try again" });
+          responseReturn(res, 404, { error: 'Password is wrong! Try again' });
         }
       } else {
-        responseReturn(res, 404, { error: "Email not found" });
+        responseReturn(res, 404, { error: 'Email not found' });
       }
     } catch (error) {
       responseReturn(res, 500, { error: error.message });
@@ -50,7 +50,7 @@ class authControllers {
   seller_login = async (req, res) => {
     const { email, password } = req.body;
     try {
-      const seller = await sellerModel.findOne({ email }).select("+password");
+      const seller = await sellerModel.findOne({ email }).select('+password');
       // console.log(admin);
       if (seller) {
         const match = await bcrypt.compare(password, seller.password);
@@ -60,20 +60,20 @@ class authControllers {
             id: seller.id,
             role: seller.role,
           });
-          res.cookie("accessToken", token, {
+          res.cookie('accessToken', token, {
             httpOnly: true,
             secure: true,
-            sameSite: "none",
+            sameSite: 'none',
             maxAge: process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
           });
-          responseReturn(res, 200, { token, message: "Login Success ✔️" });
+          responseReturn(res, 200, { token, message: 'Login Success ✔️' });
         } else {
           responseReturn(res, 404, {
-            error: "💥 Wrong Password! Try again",
+            error: '💥 Wrong Password! Try again',
           });
         }
       } else {
-        responseReturn(res, 404, { error: "Email not found" });
+        responseReturn(res, 404, { error: 'Email not found' });
       }
     } catch (error) {
       responseReturn(res, 500, { error: error.message });
@@ -85,14 +85,14 @@ class authControllers {
     try {
       const getUser = await sellerModel.findOne({ email });
       if (getUser) {
-        responseReturn(res, 404, { error: "Email Already Exists..." });
+        responseReturn(res, 404, { error: 'Email Already Exists...' });
       } else {
         const saltRounds = parseInt(process.env.SALT_ROUNDS) || 10;
         const seller = await sellerModel.create({
           name,
           email,
           password: await bcrypt.hash(password, saltRounds),
-          method: "menualy",
+          method: 'manually',
           shopInfo: {},
         });
         await sellerCustomerModel.create({
@@ -102,25 +102,26 @@ class authControllers {
           id: seller.id,
           role: seller.role,
         });
-        res.cookie("accessToken", token, {
+        res.cookie('accessToken', token, {
           expires: new Date(
-            Date.now() + process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000
+            Date.now() +
+              process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
           ),
         });
         responseReturn(res, 201, {
           token,
-          message: "Registration Successful ✔️",
+          message: 'Registration Successful ✔️',
         });
       }
     } catch (error) {
-      responseReturn(res, 500, { error: "Internal Server Error 🤖" });
+      responseReturn(res, 500, { error: 'Internal Server Error 🤖' });
     }
   };
 
   getUser = async (req, res) => {
     const { id, role } = req;
     try {
-      if (role === "admin") {
+      if (role === 'admin') {
         const user = await adminModel.findById(id);
         responseReturn(res, 200, { userInfo: user });
       } else {
@@ -128,7 +129,7 @@ class authControllers {
         responseReturn(res, 200, { userInfo: seller });
       }
     } catch (error) {
-      responseReturn(res, 500, { error: "Internal Server Error 🤖" });
+      responseReturn(res, 500, { error: 'Internal Server Error 🤖' });
     }
   };
 
@@ -143,36 +144,36 @@ class authControllers {
 
     form.parse(req, async (err, _, files) => {
       if (err) {
-        console.error("❌ Parse error:", err);
-        return responseReturn(res, 400, { error: "Parse error" });
+        console.error('❌ Parse error:', err);
+        return responseReturn(res, 400, { error: 'Parse error' });
       }
 
       if (!files.image) {
-        return responseReturn(res, 400, { error: "No image file uploaded" });
+        return responseReturn(res, 400, { error: 'No image file uploaded' });
       }
 
       const imageRaw = files.image;
       const image = Array.isArray(imageRaw) ? imageRaw[0] : imageRaw;
       try {
         const result = await cloudinary.uploader.upload(image.filepath, {
-          folder: "profile",
+          folder: 'profile',
         });
 
         if (!result || !result.url) {
-          return responseReturn(res, 500, { error: "Image upload failed" });
+          return responseReturn(res, 500, { error: 'Image upload failed' });
         }
         await sellerModel.findByIdAndUpdate(id, {
           image: result.url,
         });
         const userInfo = await sellerModel.findById(id);
         return responseReturn(res, 200, {
-          message: "Profile image uploaded successfully 👍",
+          message: 'Profile image uploaded successfully 👍',
           userInfo,
         });
       } catch (error) {
-        console.error("❌ Error in profile_image_upload:", error);
+        console.error('❌ Error in profile_image_upload:', error);
         return responseReturn(res, 500, {
-          error: error.message || "Something went wrong",
+          error: error.message || 'Something went wrong',
         });
       }
     });
@@ -193,28 +194,28 @@ class authControllers {
       });
       const userInfo = await sellerModel.findById(id);
       return responseReturn(res, 201, {
-        message: "Profile info added successfully 👍",
+        message: 'Profile info added successfully 👍',
         userInfo,
       });
     } catch (error) {
-      console.error("❌ Error in profile_info_add:", error);
+      console.error('❌ Error in profile_info_add:', error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || 'Something went wrong',
       });
     }
   };
 
   async logout(req, res) {
     try {
-      res.cookie("accessToken", null, {
+      res.cookie('accessToken', null, {
         expires: new Date(Date.now()),
         httpOnly: true,
       });
       return responseReturn(res, 200, {
-        message: "Logout successfully 👍",
+        message: 'Logout successfully 👍',
       });
     } catch (error) {
-      return handleError(res, error, "authController → logout");
+      return handleError(res, error, 'authController → logout');
     }
   }
 
@@ -223,7 +224,7 @@ class authControllers {
     // console.log(`Password change requested for ${email}`);
 
     try {
-      const user = await sellerModel.findOne({ email }).select("+password");
+      const user = await sellerModel.findOne({ email }).select('+password');
       if (!user)
         return res
           .status(404)
@@ -236,15 +237,15 @@ class authControllers {
       if (old_password === new_password) {
         return res
           .status(400)
-          .json({ message: "Новий пароль не може співпадати зі старим" });
+          .json({ message: 'Новий пароль не може співпадати зі старим' });
       }
 
       const saltRounds = parseInt(process.env.SALT_ROUNDS) || 10;
       user.password = await bcrypt.hash(new_password, saltRounds);
       await user.save();
-      res.json({ message: "Пароль змінений успішно" });
+      res.json({ message: 'Пароль змінений успішно' });
     } catch (error) {
-      return handleError(res, error, "authController → change_password");
+      return handleError(res, error, 'authController → change_password');
     }
   }
 }

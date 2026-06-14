@@ -44,8 +44,8 @@ app.options("/api/order/create-payment", (req, res) => {
 app.use(
   cors({
     origin: function (origin, callback) {
-      console.log("🌍 Incoming Origin:", origin);
-      console.log("✅ Allowed Origins:", allowedOrigins);
+      // console.log("🌍 Incoming Origin:", origin);
+      // console.log("✅ Allowed Origins:", allowedOrigins);
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
