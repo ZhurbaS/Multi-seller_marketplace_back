@@ -25,6 +25,7 @@ class customerAuthController {
         });
         const token = await createToken({
           id: createdCustomer.id,
+          role: 'customer',
           name: createdCustomer.name,
           email: createdCustomer.email,
           phone: createdCustomer.phone,
@@ -32,10 +33,10 @@ class customerAuthController {
         });
 
         res.cookie('customerToken', token, {
-          expires: new Date(
-            Date.now() +
-              process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
-          ),
+          httpOnly: true,
+          secure: true,
+          sameSite: 'none',
+          maxAge: process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
         });
         responseReturn(res, 200, {
           token,
@@ -65,16 +66,17 @@ class customerAuthController {
         if (match) {
           const token = await createToken({
             id: customer.id,
+            role: 'customer',
             name: customer.name,
             email: customer.email,
             phone: customer.phone,
             method: customer.method,
           });
           res.cookie('customerToken', token, {
-            expires: new Date(
-              Date.now() +
-                process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
-            ),
+            httpOnly: true,
+            secure: true,
+            sameSite: 'none',
+            maxAge: process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
           });
           return responseReturn(res, 201, {
             token,
@@ -103,6 +105,9 @@ class customerAuthController {
 
   async customer_logout(req, res) {
     res.cookie('customerToken', '', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
       expires: new Date(Date.now()),
     });
 
