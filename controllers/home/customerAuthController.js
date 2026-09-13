@@ -6,7 +6,6 @@ const { createToken } = require('../../utiles/tokenCreate');
 
 class customerAuthController {
   customer_register = async (req, res) => {
-    // console.log(req.body);
     const { name, email, phone, password } = req.body;
     try {
       const customer = await customerModel.findOne({ email });
@@ -55,7 +54,6 @@ class customerAuthController {
   };
 
   customer_login = async (req, res) => {
-    // console.log(req.body);
     const { email, phone, password } = req.body;
     try {
       const customer = await customerModel

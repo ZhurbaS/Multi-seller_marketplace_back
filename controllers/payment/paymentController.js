@@ -110,7 +110,12 @@ class paymentController {
 
   async get_seller_payment_details(req, res) {
     const { sellerId } = req.params;
-    // console.log(sellerId);
+    // Раніше будь-який залогінений продавець міг підставити чужий sellerId в
+    // URL і побачити чийсь баланс/виплати. Дозволяємо самому продавцю (свій
+    // sellerId) або адміну (будь-який).
+    if (req.role !== "admin" && req.id !== sellerId) {
+      return responseReturn(res, 403, { error: "Access denied" });
+    }
 
     try {
       const payments = await sellerWallet.find({ sellerId });
@@ -150,14 +155,46 @@ class paymentController {
   }
 
   async withdrawal_request(req, res) {
-    console.log(req.body);
+    const { amount } = req.body;
+    // sellerId завжди з токена, а не з тіла запиту — раніше продавець міг
+    // підставити чужий sellerId і створити запит на виплату від чужого імені.
+    const sellerId = req.id;
 
-    const { amount, sellerId } = req.body;
+    const requestedAmount = parseInt(amount);
+    if (!Number.isInteger(requestedAmount) || requestedAmount <= 0) {
+      return responseReturn(res, 400, { error: "Некоректна сума" });
+    }
 
     try {
+      // Не даємо запитати виплату більшу за реально доступний баланс —
+      // раніше цю суму ніхто не звіряв ні тут, ні при підтвердженні.
+      const payments = await sellerWallet.find({ sellerId });
+      const pendingWithdrawals = await withdrawalRequest.find({
+        sellerId,
+        status: "pending",
+      });
+      const successWithdrawals = await withdrawalRequest.find({
+        sellerId,
+        status: "success",
+      });
+
+      const totalAmount = this.sumAmount(payments);
+      const pendingAmount = this.sumAmount(pendingWithdrawals);
+      const withdrawalAmount = this.sumAmount(successWithdrawals);
+      const availableAmount = Math.max(
+        0,
+        totalAmount - (pendingAmount + withdrawalAmount)
+      );
+
+      if (requestedAmount > availableAmount) {
+        return responseReturn(res, 400, {
+          error: `Недостатньо коштів на балансі (доступно ${availableAmount})`,
+        });
+      }
+
       const withdrawal = await withdrawalRequest.create({
         sellerId,
-        amount: parseInt(amount),
+        amount: requestedAmount,
       });
       return responseReturn(res, 200, {
         withdrawal,
@@ -185,13 +222,28 @@ class paymentController {
 
   async payment_request_confirm(req, res) {
     const { paymentId } = req.body;
-    // console.log(paymentId);
 
     try {
       const payment = await withdrawalRequest.findById(paymentId);
-      const { stripeId } = await stripeModel.findOne({
+      if (!payment) {
+        return responseReturn(res, 404, { error: "Запит не знайдено" });
+      }
+      // Захист від подвійного підтвердження (і подвійного transfer у Stripe).
+      if (payment.status !== "pending") {
+        return responseReturn(res, 400, {
+          error: "Цей запит вже оброблено",
+        });
+      }
+
+      const stripeInfo = await stripeModel.findOne({
         sellerId: new ObjectId(payment.sellerId),
       });
+      if (!stripeInfo) {
+        return responseReturn(res, 400, {
+          error: "У продавця не підключено Stripe-акаунт",
+        });
+      }
+      const { stripeId } = stripeInfo;
 
       // ✅ КРОК 1: Створення тестового платежу через Charge (поповнює баланс платформи)
       // await stripe.charges.create({

@@ -165,7 +165,6 @@ class productController {
 
   product_get = async (req, res) => {
     const { productId } = req.params;
-    // console.log(productId);
     try {
       const product = await productModel
         .findById(productId)
@@ -173,6 +172,11 @@ class productController {
 
       if (!product) {
         return responseReturn(res, 404, { error: "Product not found" });
+      }
+      // Раніше будь-який залогінений продавець міг переглянути чужий товар
+      // за productId. Дозволяємо власнику товару або адміну.
+      if (req.role !== "admin" && product.sellerId.toString() !== req.id) {
+        return responseReturn(res, 403, { error: "Access denied" });
       }
       responseReturn(res, 200, { product });
     } catch (error) {
@@ -201,6 +205,19 @@ class productController {
       }
       if (!name) {
         return responseReturn(res, 400, { error: "Name is required" });
+      }
+
+      // Раніше будь-який залогінений продавець міг оновити чужий товар,
+      // знаючи лише productId. Перевіряємо власника перед будь-якими змінами.
+      const existingProduct = await productModel.findById(productId);
+      if (!existingProduct) {
+        return responseReturn(res, 404, { error: "Product not found" });
+      }
+      if (
+        req.role !== "admin" &&
+        existingProduct.sellerId.toString() !== req.id
+      ) {
+        return responseReturn(res, 403, { error: "Access denied" });
       }
 
       name = name.trim();
@@ -293,6 +310,10 @@ class productController {
         const product = await productModel.findById(productId);
         if (!product) {
           return responseReturn(res, 404, { error: "Product not found" });
+        }
+        // Раніше будь-який залогінений продавець міг замінити фото чужого товару.
+        if (req.role !== "admin" && product.sellerId.toString() !== req.id) {
+          return responseReturn(res, 403, { error: "Access denied" });
         }
 
         let { images } = product;

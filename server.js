@@ -23,6 +23,10 @@ const allowedOrigins =
         "http://localhost:5000",
         "http://localhost:5001",
         "http://localhost:5002",
+        // Codespaces forwarded-адреси (front і back) — заміните/додайте свої,
+        // якщо Codespaces видасть нову адресу після перестворення контейнера.
+        "https://musical-fiesta-699j4j4547v7f6rv-5173.app.github.dev",
+        "https://fictional-memory-v66xqxqrq7wxc976-5000.app.github.dev",
       ];
 
 app.use(bodyParser.json());
