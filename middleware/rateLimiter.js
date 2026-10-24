@@ -11,4 +11,15 @@ const loginLimiter = rateLimit({
   message: { error: "Забагато спроб входу. Спробуйте ще раз через 15 хвилин." },
 });
 
-module.exports = { loginLimiter };
+// Захист черги модерації від спаму: одна людина не повинна мати змогу
+// закидати відгуки скриптом. 20 відгуків/годину з одної IP більш ніж
+// достатньо для будь-якого реального покупця.
+const reviewLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Забагато відгуків. Спробуйте ще раз пізніше." },
+});
+
+module.exports = { loginLimiter, reviewLimiter };

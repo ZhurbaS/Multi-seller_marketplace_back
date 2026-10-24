@@ -1,5 +1,7 @@
 const productModel = require("../../models/productModel");
 const categoryModel = require("../../models/categoryModel");
+const customerModel = require("../../models/customerModel");
+const customerOrderModel = require("../../models/customerOrderModel");
 const { responseReturn } = require("../../utiles/response");
 const queryProducts = require("../../utiles/queryProducts");
 const reviewModel = require("../../models/reviewModel");
@@ -234,40 +236,83 @@ class homeController {
     }
   }
 
-  async submit_review(req, res) {
-    // console.log(req.body);
+  // Recalculates a product's average rating from its APPROVED reviews only
+  // (pending/rejected reviews never affect the public rating). Called only
+  // when a review is approved, edited-while-approved, or un-approved.
+  recalculateProductRating = async (productId) => {
+    const approvedReviews = await reviewModel.find({
+      productId,
+      status: "approved",
+    });
 
-    const { productId, rating, review, name } = req.body;
+    let productRating = 0;
+    if (approvedReviews.length !== 0) {
+      const sum = approvedReviews.reduce((acc, r) => acc + r.rating, 0);
+      productRating = (sum / approvedReviews.length).toFixed(1);
+    }
+
+    await productModel.findByIdAndUpdate(productId, {
+      rating: productRating,
+    });
+  };
+
+  async submit_review(req, res) {
+    const { productId, rating, review } = req.body;
+    const customerId = req.id; // set by customerAuthMiddleware — never trust a client-submitted customerId/name
 
     try {
-      await reviewModel.create({
-        productId,
-        name,
-        rating,
-        review,
-        date: moment(Date.now()).format("LL"),
-      });
-
-      let rat = 0;
-      const reviews = await reviewModel.find({
-        productId,
-      });
-
-      for (let i = 0; i < reviews.length; i++) {
-        rat = rat + reviews[i].rating;
+      if (!productId || !rating || !review) {
+        return responseReturn(res, 400, {
+          error: "productId, rating і review є обов'язковими",
+        });
       }
 
-      let productRating = 0;
-      if (reviews.length !== 0) {
-        productRating = (rat / reviews.length).toFixed(1);
+      // Verified purchase check: the customer must have an order for this
+      // exact product that has actually been delivered — not just placed
+      // or paid for. This is what lets us show a "Verified Purchase" badge
+      // and is the whole point of gating who can review at all.
+      const deliveredOrder = await customerOrderModel
+        .findOne({
+          customerId,
+          delivery_status: "delivered",
+          "products.productInfo._id": productId,
+        })
+        .sort({ createdAt: -1 });
+
+      if (!deliveredOrder) {
+        return responseReturn(res, 403, {
+          error:
+            "Залишити відгук можна лише для товару з доставленого замовлення",
+        });
       }
 
-      await productModel.findByIdAndUpdate(productId, {
-        rating: productRating,
-      });
+      const customer = await customerModel.findById(customerId);
+      if (!customer) {
+        return responseReturn(res, 404, { error: "Клієнта не знайдено" });
+      }
+
+      // Upsert on (productId, customerId): resubmitting edits the existing
+      // review instead of creating a duplicate, and always sends it back
+      // to "pending" so the edited content gets re-moderated.
+      await reviewModel.findOneAndUpdate(
+        { productId, customerId },
+        {
+          productId,
+          customerId,
+          orderId: deliveredOrder._id,
+          name: customer.name,
+          rating,
+          review,
+          date: moment(Date.now()).format("LL"),
+          status: "pending",
+          adminNote: "",
+          moderatedAt: null,
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
 
       return responseReturn(res, 201, {
-        message: "Review added successfully",
+        message: "Відгук надіслано на модерацію",
       });
     } catch (error) {
       console.error("💥 Error in homeController: submit_review:", error);
@@ -277,11 +322,42 @@ class homeController {
     }
   }
 
+  // Public: can this logged-in customer review this product right now?
+  // Front-end uses this to decide whether to show the review form at all,
+  // instead of letting anyone submit and finding out only after a 403.
+  async can_review(req, res) {
+    const { productId } = req.params;
+    const customerId = req.id;
+
+    try {
+      const deliveredOrder = await customerOrderModel.findOne({
+        customerId,
+        delivery_status: "delivered",
+        "products.productInfo._id": productId,
+      });
+
+      const existingReview = await reviewModel.findOne({
+        productId,
+        customerId,
+      });
+
+      return responseReturn(res, 200, {
+        canReview: !!deliveredOrder,
+        existingReview,
+      });
+    } catch (error) {
+      console.error("💥 Error in homeController: can_review:", error);
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
+
+  // Public: only ever returns APPROVED reviews — pending/rejected reviews
+  // stay invisible to everyone except the admin moderation queue.
   async get_reviews(req, res) {
-    // console.log(req.params);
     const { productId } = req.params;
     let { pageNo } = req.query;
-    // console.log(productId, pageNo);
 
     pageNo = parseInt(pageNo);
     const limit = parseInt(process.env.REVIEWS_PER_PAGE, 10) || 5; // 5
@@ -291,18 +367,9 @@ class homeController {
       let getRating = await reviewModel.aggregate([
         {
           $match: {
-            productId: {
-              $eq: new ObjectId(productId),
-            },
-            rating: {
-              $not: {
-                $size: 0,
-              },
-            },
+            productId: new ObjectId(productId),
+            status: "approved",
           },
-        },
-        {
-          $unwind: "$rating",
         },
         {
           $group: {
@@ -331,10 +398,11 @@ class homeController {
         }
       }
 
-      const getAll = await reviewModel.find({ productId });
+      const getAll = await reviewModel.find({ productId, status: "approved" });
       const reviews = await reviewModel
         .find({
           productId,
+          status: "approved",
         })
         .skip(skipPage)
         .limit(limit)
@@ -352,6 +420,89 @@ class homeController {
       });
     }
   }
+
+  // Admin only: moderation queue. Defaults to "pending" so the dashboard
+  // page opens straight to the reviews that actually need a decision;
+  // pass ?status=approved or ?status=rejected to audit those instead.
+  async admin_get_reviews(req, res) {
+    let { pageNo, status } = req.query;
+    pageNo = parseInt(pageNo) || 1;
+    status = ["pending", "approved", "rejected"].includes(status)
+      ? status
+      : "pending";
+
+    const limit = 10;
+    const skipPage = limit * (pageNo - 1);
+
+    try {
+      const filter = { status };
+      const totalReview = await reviewModel.countDocuments(filter);
+      const reviews = await reviewModel
+        .find(filter)
+        .populate("productId", "name slug images")
+        .skip(skipPage)
+        .limit(limit)
+        .sort({ createdAt: -1 });
+
+      const pendingCount = await reviewModel.countDocuments({
+        status: "pending",
+      });
+
+      return responseReturn(res, 200, {
+        reviews,
+        totalReview,
+        pendingCount,
+      });
+    } catch (error) {
+      console.error("💥 Error in homeController: admin_get_reviews:", error);
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  }
+
+  // Admin only: approve or reject a pending (or previously-decided) review.
+  // Approving/un-approving is the ONLY thing that ever changes a product's
+  // publicly-shown rating — never the raw act of submitting a review.
+  admin_review_status_update = async (req, res) => {
+    const { reviewId } = req.params;
+    const { status, adminNote } = req.body;
+
+    if (!["approved", "rejected"].includes(status)) {
+      return responseReturn(res, 400, {
+        error: "status має бути 'approved' або 'rejected'",
+      });
+    }
+
+    try {
+      const review = await reviewModel.findById(reviewId);
+      if (!review) {
+        return responseReturn(res, 404, { error: "Відгук не знайдено" });
+      }
+
+      // Per FTC/consumer-protection guidance: never rewrite a reviewer's
+      // own words — moderation can only accept/reject, not edit content.
+      review.status = status;
+      review.adminNote = adminNote || "";
+      review.moderatedAt = new Date();
+      await review.save();
+
+      await this.recalculateProductRating(review.productId);
+
+      return responseReturn(res, 200, {
+        message:
+          status === "approved" ? "Відгук опубліковано" : "Відгук відхилено",
+      });
+    } catch (error) {
+      console.error(
+        "💥 Error in homeController: admin_review_status_update:",
+        error
+      );
+      return responseReturn(res, 500, {
+        error: error.message || "Something went wrong",
+      });
+    }
+  };
 }
 
 module.exports = new homeController();

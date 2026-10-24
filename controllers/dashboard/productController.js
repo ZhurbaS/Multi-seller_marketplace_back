@@ -81,6 +81,29 @@ class productController {
         const price = parseInt(getFieldValue(fields.price)) || 0;
         const shopName = getFieldValue(fields.shopName).trim();
 
+        // Характеристики — необов'язкове поле, приходить як JSON-рядок
+        // (FormData не вміє передавати масиви об'єктів напряму). Порожні
+        // рядки (продавець додав рядок, але нічого не вписав) відфільтровуємо.
+        let specifications = [];
+        const rawSpecifications = getFieldValue(fields.specifications);
+        if (rawSpecifications) {
+          try {
+            const parsed = JSON.parse(rawSpecifications);
+            if (Array.isArray(parsed)) {
+              specifications = parsed
+                .map((s) => ({
+                  key: String(s.key || "").trim(),
+                  value: String(s.value || "").trim(),
+                }))
+                .filter((s) => s.key && s.value);
+            }
+          } catch {
+            return responseReturn(res, 400, {
+              error: "Некоректний формат характеристик",
+            });
+          }
+        }
+
         const slugBase = slugify(name, {
           lower: true,
           strict: true,
@@ -117,6 +140,7 @@ class productController {
           discount,
           description,
           images: allImageUrl,
+          specifications,
         });
 
         return responseReturn(res, 201, {
@@ -198,6 +222,7 @@ class productController {
         price,
         category,
         productId,
+        specifications,
       } = req.body;
 
       if (!productId) {
@@ -244,6 +269,15 @@ class productController {
 
       if (category) {
         updateData.category = category; // просто _id
+      }
+
+      if (Array.isArray(specifications)) {
+        updateData.specifications = specifications
+          .map((s) => ({
+            key: String(s?.key || "").trim(),
+            value: String(s?.value || "").trim(),
+          }))
+          .filter((s) => s.key && s.value);
       }
 
       // Використовуємо populate, щоб підвантажити дані категорії

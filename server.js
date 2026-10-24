@@ -27,6 +27,7 @@ const allowedOrigins =
         // якщо Codespaces видасть нову адресу після перестворення контейнера.
         "https://musical-fiesta-699j4j4547v7f6rv-5173.app.github.dev",
         "https://fictional-memory-v66xqxqrq7wxc976-5000.app.github.dev",
+        "https://upgraded-space-telegram-699j4j454x4424r4g-5173.app.github.dev",
       ];
 
 app.use(bodyParser.json());

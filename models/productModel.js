@@ -55,6 +55,18 @@ const productSchema = new Schema(
       type: Number,
       default: 0,
     },
+    // Вільні пари ключ-значення ("Екран" → "15.6″"), а не жорстка схема під
+    // кожну категорію — різні товари (ноутбук, годинник, колонки) мають
+    // абсолютно різний набір характеристик, і продавцю потрібна гнучкість.
+    specifications: {
+      type: [
+        {
+          key: { type: String, required: true, trim: true },
+          value: { type: String, required: true, trim: true },
+        },
+      ],
+      default: [],
+    },
   },
   { timestamps: true }
 );
