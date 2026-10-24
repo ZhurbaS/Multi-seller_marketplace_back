@@ -12,6 +12,28 @@ cloudinary.config({
   secure: true,
 });
 
+// Cloudinary повертає http_code 420 (або 429), коли перевищено ліміт запитів.
+// Завантажуємо зображення по одному й повторюємо спробу з наростаючою
+// затримкою (1с, 2с, 4с), щоб кілька фото поспіль не ламали додавання товару.
+const uploadImageWithRetry = async (filepath, options = {}) => {
+  const delays = [1000, 2000, 4000];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await cloudinary.uploader.upload(filepath, options);
+    } catch (error) {
+      const rateLimited = error?.http_code === 420 || error?.http_code === 429;
+      if (!rateLimited || attempt >= delays.length) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+    }
+  }
+};
+
+const isCloudinaryRateLimit = (error) =>
+  error?.http_code === 420 || error?.http_code === 429;
+
+const RATE_LIMIT_MESSAGE =
+  "Сервіс зображень тимчасово перевантажений. Зачекайте хвилину і спробуйте ще раз (або додайте менше фото).";
+
 // Допоміжна функція для отримання "першого значення" поля
 const getFieldValue = (field) =>
   Array.isArray(field) ? field[0] : field || "";
@@ -120,7 +142,7 @@ class productController {
           : [];
         const allImageUrl = [];
         for (let img of imageArray) {
-          const result = await cloudinary.uploader.upload(img.filepath, {
+          const result = await uploadImageWithRetry(img.filepath, {
             folder: "products",
           });
           allImageUrl.push(result.url);
@@ -149,6 +171,9 @@ class productController {
         });
       } catch (error) {
         console.error("❌ Error in add_product:", error);
+        if (isCloudinaryRateLimit(error)) {
+          return responseReturn(res, 429, { error: RATE_LIMIT_MESSAGE });
+        }
         return responseReturn(res, 500, {
           error: error.message || "Щось пішло не так",
         });
@@ -363,7 +388,7 @@ class productController {
         // Завантажуємо всі нові картинки
         const newUrls = [];
         for (let newImg of newImageArray) {
-          const result = await cloudinary.uploader.upload(newImg.filepath, {
+          const result = await uploadImageWithRetry(newImg.filepath, {
             folder: "products",
           });
 
@@ -389,6 +414,9 @@ class productController {
         });
       } catch (error) {
         console.error("❌ Error in product_image_update:", error);
+        if (isCloudinaryRateLimit(error)) {
+          return responseReturn(res, 429, { error: RATE_LIMIT_MESSAGE });
+        }
         return responseReturn(res, 404, {
           error: error.message || "Щось пішло не так",
         });

@@ -447,7 +447,11 @@ class homeController {
       const totalReview = await reviewModel.countDocuments(filter);
       const reviews = await reviewModel
         .find(filter)
-        .populate("productId", "name slug images")
+        .populate({
+          path: "productId",
+          select: "name slug images",
+          model: "products",
+        })
         .skip(skipPage)
         .limit(limit)
         .sort({ createdAt: -1 });
