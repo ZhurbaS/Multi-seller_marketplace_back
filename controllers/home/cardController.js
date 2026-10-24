@@ -44,7 +44,7 @@ class cardController {
     } catch (error) {
       console.error("💥 Error in cardController: add_to_card:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   };
@@ -157,7 +157,7 @@ class cardController {
     } catch (error) {
       console.error("💥 Error in cardController: get_card_products:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -173,7 +173,7 @@ class cardController {
     } catch (error) {
       console.error("💥 Error in cardController: delete_card_product:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -198,7 +198,7 @@ class cardController {
     } catch (error) {
       console.error("💥 Error in cardController: quantity_inc:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -223,7 +223,7 @@ class cardController {
     } catch (error) {
       console.error("💥 Error in cardController: quantity_dec:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -246,7 +246,7 @@ class cardController {
     } catch (error) {
       console.error("💥 Error in cardController: add_wishlist:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -266,7 +266,7 @@ class cardController {
     } catch (error) {
       console.error("💥 Error in cardController: get_wishlist:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -291,7 +291,7 @@ class cardController {
     } catch (error) {
       console.error("💥 Error in cardController: remove_wishlist:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }

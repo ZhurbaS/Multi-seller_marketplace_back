@@ -36,7 +36,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: get_categories:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   };
@@ -67,7 +67,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: get_products:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   };
@@ -96,7 +96,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: price_range_product:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   };
@@ -155,7 +155,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: query_products:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   };
@@ -231,7 +231,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: get_product_details:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -321,7 +321,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: submit_review:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -356,7 +356,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: can_review:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -424,7 +424,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: get_reviews:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -468,7 +468,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: admin_get_reviews:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -511,7 +511,7 @@ class homeController {
         error
       );
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   };

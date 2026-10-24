@@ -9,8 +9,10 @@ const handleError = (res, error, location = "Unknown") => {
         : "🔒 stack trace hidden in production",
   });
 
+  // Клієнту повертаємо фіксований український текст, а технічне повідомлення
+  // бібліотеки (часто англійською) лишається тільки в логах сервера.
   return res.status(500).json({
-    error: message,
+    error: "Внутрішня помилка сервера",
   });
 };
 

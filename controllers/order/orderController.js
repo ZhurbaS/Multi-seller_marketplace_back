@@ -181,7 +181,7 @@ class orderController {
     } catch (error) {
       console.error("💥 Error in orderController: place_order:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -231,7 +231,7 @@ class orderController {
         error
       );
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -268,7 +268,7 @@ class orderController {
     } catch (error) {
       console.error("💥 Error in orderController: get_orders:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -295,7 +295,7 @@ class orderController {
     } catch (error) {
       console.error("💥 Error in orderController: get_orders_details:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -539,7 +539,7 @@ class orderController {
       responseReturn(res, 200, { clientSecret: payment.client_secret });
     } catch (error) {
       console.log("Stripe error:", error.message);
-      responseReturn(res, 500, { error: error.message });
+      responseReturn(res, 500, { error: "Щось пішло не так" });
     }
   }
 

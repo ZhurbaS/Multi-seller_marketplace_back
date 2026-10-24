@@ -4,6 +4,10 @@ const slugify = require("slugify");
 const { nanoid } = require("nanoid");
 const { IncomingForm } = require("formidable");
 const productModel = require("../../models/productModel");
+const cardModel = require("../../models/cardModel");
+const wishlistModel = require("../../models/wishlistModel");
+const reviewModel = require("../../models/reviewModel");
+const bannerModel = require("../../models/bannerModel");
 const mongoose = require("mongoose");
 cloudinary.config({
   cloud_name: process.env.CLOUD_NAME,
@@ -33,6 +37,14 @@ const isCloudinaryRateLimit = (error) =>
 
 const RATE_LIMIT_MESSAGE =
   "Сервіс зображень тимчасово перевантажений. Зачекайте хвилину і спробуйте ще раз (або додайте менше фото).";
+
+// Витягує public_id з URL Cloudinary:
+// https://res.cloudinary.com/<cloud>/image/upload/v123/products/abc.jpg -> "products/abc"
+const getCloudinaryPublicId = (url) => {
+  if (typeof url !== "string") return null;
+  const match = url.match(/\/upload\/(?:v\d+\/)?(.+)\.[a-zA-Z0-9]+$/);
+  return match ? match[1] : null;
+};
 
 // Допоміжна функція для отримання "першого значення" поля
 const getFieldValue = (field) =>
@@ -175,7 +187,7 @@ class productController {
           return responseReturn(res, 429, { error: RATE_LIMIT_MESSAGE });
         }
         return responseReturn(res, 500, {
-          error: error.message || "Щось пішло не так",
+          error: "Щось пішло не так",
         });
       }
     });
@@ -207,7 +219,7 @@ class productController {
     } catch (error) {
       console.log(error.message);
       responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   };
@@ -231,7 +243,7 @@ class productController {
     } catch (error) {
       console.log(error.message);
       responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
     }
   };
@@ -321,8 +333,61 @@ class productController {
     } catch (error) {
       console.error("❌ Error in product_update:", error);
       responseReturn(res, 500, {
-        error: error.message || "Щось пішло не так",
+        error: "Щось пішло не так",
       });
+    }
+  };
+
+  // Видалення товару: тільки власник (або адмін). Замовлення зберігають власний
+  // знімок товару (назва, ціна, фото), тому історія замовлень не ламається.
+  product_delete = async (req, res) => {
+    const { productId } = req.params;
+
+    try {
+      if (!mongoose.Types.ObjectId.isValid(productId)) {
+        return responseReturn(res, 400, {
+          error: "Некоректний ідентифікатор товару",
+        });
+      }
+
+      const product = await productModel.findById(productId);
+      if (!product) {
+        return responseReturn(res, 404, { error: "Товар не знайдено" });
+      }
+      if (req.role !== "admin" && product.sellerId.toString() !== req.id) {
+        return responseReturn(res, 403, { error: "Доступ заборонено" });
+      }
+
+      // Видаляємо фото з Cloudinary. Помилка видалення фото не блокує
+      // видалення товару: файл можна прибрати вручну, а товар уже не потрібен.
+      const publicIds = (Array.isArray(product.images) ? product.images : [])
+        .map(getCloudinaryPublicId)
+        .filter(Boolean);
+      for (const publicId of publicIds) {
+        try {
+          await cloudinary.uploader.destroy(publicId);
+        } catch (imgError) {
+          console.error("⚠️ Cloudinary destroy failed:", publicId, imgError);
+        }
+      }
+
+      // Прибираємо «осиротілі» записи, що посилаються на товар
+      await Promise.all([
+        cardModel.deleteMany({ productId }),
+        wishlistModel.deleteMany({ productId }),
+        reviewModel.deleteMany({ productId }),
+        bannerModel.deleteMany({ productId }),
+      ]);
+
+      await productModel.findByIdAndDelete(productId);
+
+      return responseReturn(res, 200, {
+        message: "Товар видалено",
+        productId,
+      });
+    } catch (error) {
+      console.error("❌ Error in product_delete:", error);
+      return responseReturn(res, 500, { error: "Щось пішло не так" });
     }
   };
 
@@ -418,7 +483,7 @@ class productController {
           return responseReturn(res, 429, { error: RATE_LIMIT_MESSAGE });
         }
         return responseReturn(res, 404, {
-          error: error.message || "Щось пішло не так",
+          error: "Щось пішло не так",
         });
       }
     });

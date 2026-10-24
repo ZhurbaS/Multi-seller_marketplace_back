@@ -129,7 +129,7 @@ class chatController {
         error.message
       );
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -188,7 +188,7 @@ class chatController {
         error.message
       );
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -207,7 +207,7 @@ class chatController {
         error.message
       );
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -245,7 +245,7 @@ class chatController {
         error.message
       );
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -304,7 +304,7 @@ class chatController {
         error.message
       );
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -316,7 +316,7 @@ class chatController {
     } catch (error) {
       console.error("💥 Error in chatController: get_sellers:", error.message);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -340,7 +340,7 @@ class chatController {
         error.message
       );
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -381,7 +381,7 @@ class chatController {
         error.message
       );
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -417,7 +417,7 @@ class chatController {
         error.message
       );
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
     }
   }

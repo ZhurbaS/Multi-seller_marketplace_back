@@ -49,7 +49,7 @@ class customerAuthController {
         error,
       );
       return responseReturn(res, 500, {
-        error: error.message || 'Щось пішло не так',
+        error: "Щось пішло не так",
       });
     }
   };
@@ -98,7 +98,7 @@ class customerAuthController {
         error,
       );
       return responseReturn(res, 500, {
-        error: error.message || 'Щось пішло не так',
+        error: "Щось пішло не так",
       });
     }
   };

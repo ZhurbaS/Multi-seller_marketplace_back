@@ -15,6 +15,11 @@ router.post(
   authMiddleware,
   productController.product_update
 );
+router.delete(
+  "/product-delete/:productId",
+  authMiddleware,
+  productController.product_delete
+);
 router.post(
   "/product-image-update",
   authMiddleware,

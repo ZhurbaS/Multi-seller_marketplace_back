@@ -43,7 +43,7 @@ class authControllers {
         responseReturn(res, 404, { error: 'Email не знайдено' });
       }
     } catch (error) {
-      responseReturn(res, 500, { error: error.message });
+      responseReturn(res, 500, { error: "Щось пішло не так" });
     }
   }
 
@@ -76,7 +76,7 @@ class authControllers {
         responseReturn(res, 404, { error: 'Email не знайдено' });
       }
     } catch (error) {
-      responseReturn(res, 500, { error: error.message });
+      responseReturn(res, 500, { error: "Щось пішло не так" });
     }
   };
 
@@ -173,7 +173,7 @@ class authControllers {
       } catch (error) {
         console.error('❌ Error in profile_image_upload:', error);
         return responseReturn(res, 500, {
-          error: error.message || 'Щось пішло не так',
+          error: "Щось пішло не так",
         });
       }
     });
@@ -200,7 +200,7 @@ class authControllers {
     } catch (error) {
       console.error('❌ Error in profile_info_add:', error);
       return responseReturn(res, 500, {
-        error: error.message || 'Щось пішло не так',
+        error: "Щось пішло не так",
       });
     }
   };
