@@ -40,6 +40,7 @@ class orderController {
   }
 
   async place_order(req, res) {
+    // console.log(req.body);
     const { products, shipping_fee, shippingInfo } = req.body;
     // customerId завжди з токена (customerAuthMiddleware), а НЕ з тіла запиту —
     // раніше клієнт міг підставити чужий userId.
@@ -174,22 +175,23 @@ class orderController {
       }, process.env.ORDER_PAYMENT_CHECK_IN * 60 * 60 * 24 * 1000);
 
       responseReturn(res, 200, {
-        message: "Order placed successfully",
+        message: "Замовлення успішно оформлено",
         orderId: order.id,
       });
     } catch (error) {
       console.error("💥 Error in orderController: place_order:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }
 
   async get_customer_dashboard_data(req, res) {
+    // console.log(req.params);
     const { userId } = req.params;
     // Клієнт міг раніше підставити чужий userId в URL і побачити чужі замовлення.
     if (req.id !== userId) {
-      return responseReturn(res, 403, { error: "Access denied" });
+      return responseReturn(res, 403, { error: "Доступ заборонено" });
     }
     try {
       const recentOrdersLimit =
@@ -229,21 +231,22 @@ class orderController {
         error
       );
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }
 
   async get_orders(req, res) {
+    // console.log(req.params);
     const { customerId, status = "all" } = req.params;
 
     if (!ObjectId.isValid(customerId)) {
-      return responseReturn(res, 404, { error: "Invalid customerId" });
+      return responseReturn(res, 404, { error: "Некоректний customerId" });
     }
     // Раніше будь-хто залогінений як клієнт міг підставити чужий customerId і
     // побачити чиїсь замовлення.
     if (req.id !== customerId) {
-      return responseReturn(res, 403, { error: "Access denied" });
+      return responseReturn(res, 403, { error: "Доступ заборонено" });
     }
 
     try {
@@ -265,12 +268,14 @@ class orderController {
     } catch (error) {
       console.error("💥 Error in orderController: get_orders:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }
 
   async get_orders_details(req, res) {
+    // console.log(req.params);
+
     const { orderId } = req.params;
 
     try {
@@ -281,7 +286,7 @@ class orderController {
       // Раніше будь-хто залогінений як клієнт міг підставити чужий orderId і
       // прочитати чиїсь ПІБ/адресу/склад замовлення.
       if (order.customerId.toString() !== req.id) {
-        return responseReturn(res, 403, { error: "Access denied" });
+        return responseReturn(res, 403, { error: "Доступ заборонено" });
       }
 
       responseReturn(res, 200, {
@@ -290,12 +295,14 @@ class orderController {
     } catch (error) {
       console.error("💥 Error in orderController: get_orders_details:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }
 
   async get_admin_orders(req, res) {
+    // console.log(req.query);
+
     try {
       let { page = 1, searchValue = "", perPage = 10 } = req.query;
 
@@ -332,6 +339,8 @@ class orderController {
           },
         ]);
 
+        // console.log(orders);
+        // console.log(totalOrder);
         return responseReturn(res, 200, {
           myOrdersArr: orders,
           totalOrderCount: totalOrder.length,
@@ -344,6 +353,7 @@ class orderController {
   }
 
   async get_admin_order_details(req, res) {
+    // console.log(req.params);
     const { orderId } = req.params;
 
     try {
@@ -376,6 +386,9 @@ class orderController {
     const { orderId } = req.params;
     const { status } = req.body;
 
+    // console.log(orderId);
+    // console.log(status);
+
     try {
       await customerOrderModel.findByIdAndUpdate(orderId, {
         delivery_status: status,
@@ -400,10 +413,13 @@ class orderController {
   async get_seller_orders(req, res) {
     const { sellerId } = req.params;
 
+    // console.log(sellerId);
+    // console.log(req.query);
+
     // Раніше один продавець міг підставити чужий sellerId в URL і побачити
     // замовлення іншого продавця.
     if (req.id !== sellerId) {
-      return responseReturn(res, 403, { error: "Access denied" });
+      return responseReturn(res, 403, { error: "Доступ заборонено" });
     }
 
     let { page = 1, searchValue = "", perPage = 10 } = req.query;
@@ -440,6 +456,7 @@ class orderController {
 
   async get_seller_order_details(req, res) {
     const { orderId } = req.params;
+    // console.log(orderId);
 
     try {
       const order = await authorOrderModel.findById(orderId);
@@ -449,7 +466,7 @@ class orderController {
       // Раніше продавець міг підставити чужий orderId і прочитати замовлення
       // іншого продавця.
       if (order.sellerId.toString() !== req.id) {
-        return responseReturn(res, 403, { error: "Access denied" });
+        return responseReturn(res, 403, { error: "Доступ заборонено" });
       }
 
       return responseReturn(res, 200, { order });
@@ -470,6 +487,9 @@ class orderController {
     const { orderId } = req.params;
     const { status } = req.body;
 
+    // console.log(orderId);
+    // console.log(status);
+
     try {
       const order = await authorOrderModel.findById(orderId);
       if (!order) {
@@ -477,7 +497,7 @@ class orderController {
       }
       // Раніше продавець міг змінити статус чужого замовлення.
       if (order.sellerId.toString() !== req.id) {
-        return responseReturn(res, 403, { error: "Access denied" });
+        return responseReturn(res, 403, { error: "Доступ заборонено" });
       }
 
       await authorOrderModel.findByIdAndUpdate(orderId, {
@@ -501,15 +521,20 @@ class orderController {
   }
 
   async create_payment(req, res) {
+    // console.log("Received body:", req.body);
+
     const { price } = req.body;
     try {
       const payment = await stripe.paymentIntents.create({
         amount: price * 100,
         currency: "eur",
+
         automatic_payment_methods: {
           enabled: true,
         },
       });
+
+      // console.log("PaymentIntent created:", payment);
 
       responseReturn(res, 200, { clientSecret: payment.client_secret });
     } catch (error) {
@@ -520,6 +545,7 @@ class orderController {
 
   async order_confirm(req, res) {
     const { orderId } = req.params;
+    // console.log(orderId);
 
     try {
       const existingOrder = await customerOrderModel.findById(orderId);
@@ -547,7 +573,7 @@ class orderController {
       const authOrder = await authorOrderModel.find({
         orderId: new ObjectId(orderId),
       });
-      const time = moment(Date.now()).format("l");
+      const time = moment(Date.now()).format("l"); // m/d/year
       const splitTime = time.split("/");
 
       await myShopWallet.create({

@@ -6,11 +6,12 @@ const { createToken } = require('../../utiles/tokenCreate');
 
 class customerAuthController {
   customer_register = async (req, res) => {
+    // console.log(req.body);
     const { name, email, phone, password } = req.body;
     try {
       const customer = await customerModel.findOne({ email });
       if (customer) {
-        return responseReturn(res, 404, { error: 'Email already exists' });
+        return responseReturn(res, 404, { error: 'Користувач з таким Email вже існує' });
       } else {
         const createdCustomer = await customerModel.create({
           name: name.trim(),
@@ -39,7 +40,7 @@ class customerAuthController {
         });
         responseReturn(res, 200, {
           token,
-          message: 'User registration successful',
+          message: 'Реєстрацію успішно завершено',
         });
       }
     } catch (error) {
@@ -48,12 +49,13 @@ class customerAuthController {
         error,
       );
       return responseReturn(res, 500, {
-        error: error.message || 'Something went wrong',
+        error: error.message || 'Щось пішло не так',
       });
     }
   };
 
   customer_login = async (req, res) => {
+    // console.log(req.body);
     const { email, phone, password } = req.body;
     try {
       const customer = await customerModel
@@ -78,16 +80,16 @@ class customerAuthController {
           });
           return responseReturn(res, 201, {
             token,
-            message: 'User login successful',
+            message: 'Вхід виконано успішно',
           });
         } else {
           return responseReturn(res, 404, {
-            error: 'Password wrong',
+            error: 'Невірний пароль',
           });
         }
       } else {
         return responseReturn(res, 404, {
-          error: 'Email not found',
+          error: 'Email не знайдено',
         });
       }
     } catch (error) {
@@ -96,7 +98,7 @@ class customerAuthController {
         error,
       );
       return responseReturn(res, 500, {
-        error: error.message || 'Something went wrong',
+        error: error.message || 'Щось пішло не так',
       });
     }
   };
@@ -110,7 +112,7 @@ class customerAuthController {
     });
 
     return responseReturn(res, 200, {
-      message: 'Logout successful',
+      message: 'Ви успішно вийшли',
     });
   }
 }

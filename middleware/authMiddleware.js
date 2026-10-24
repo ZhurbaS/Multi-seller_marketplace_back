@@ -5,7 +5,7 @@ module.exports.authMiddleware = async (req, res, next) => {
   const { accessToken } = req.cookies;
 
   if (!accessToken) {
-    return res.status(409).json({ error: "Please Login First 🙏" });
+    return res.status(409).json({ error: "Будь ласка, спочатку увійдіть 🙏" });
   } else {
     try {
       const deCodeToken = await jwt.verify(accessToken, process.env.SECRET);
@@ -13,7 +13,7 @@ module.exports.authMiddleware = async (req, res, next) => {
       req.id = deCodeToken.id;
       next();
     } catch (error) {
-      return res.status(409).json({ error: "Please Login" });
+      return res.status(409).json({ error: "Сесія недійсна, увійдіть знову" });
     }
   }
 };
@@ -25,7 +25,7 @@ module.exports.customerAuthMiddleware = async (req, res, next) => {
   const { customerToken } = req.cookies;
 
   if (!customerToken) {
-    return res.status(409).json({ error: "Please Login First 🙏" });
+    return res.status(409).json({ error: "Будь ласка, спочатку увійдіть 🙏" });
   } else {
     try {
       const deCodeToken = await jwt.verify(customerToken, process.env.SECRET);
@@ -33,7 +33,7 @@ module.exports.customerAuthMiddleware = async (req, res, next) => {
       req.id = deCodeToken.id;
       next();
     } catch (error) {
-      return res.status(409).json({ error: "Please Login" });
+      return res.status(409).json({ error: "Сесія недійсна, увійдіть знову" });
     }
   }
 };
@@ -42,7 +42,7 @@ module.exports.customerAuthMiddleware = async (req, res, next) => {
 // які визначають req.role.
 module.exports.requireRole = (...roles) => (req, res, next) => {
   if (!roles.includes(req.role)) {
-    return res.status(403).json({ error: "Access denied" });
+    return res.status(403).json({ error: "Доступ заборонено" });
   }
   next();
 };

@@ -1,5 +1,5 @@
 const handleError = (res, error, location = "Unknown") => {
-  const message = error?.message || "Internal Server Error";
+  const message = error?.message || "Внутрішня помилка сервера";
 
   console.error(`❌ Error in ${location}:`, {
     message,

@@ -36,7 +36,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: get_categories:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   };
@@ -67,7 +67,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: get_products:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   };
@@ -96,7 +96,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: price_range_product:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   };
@@ -155,7 +155,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: query_products:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   };
@@ -166,14 +166,14 @@ class homeController {
     const { slug } = req.params;
 
     if (!slug) {
-      return responseReturn(res, 404, { error: "Invalid product slug" });
+      return responseReturn(res, 404, { error: "Некоректний slug товару" });
     }
 
     try {
       const product = await productModel.findOne({ slug });
       if (!product) {
         return responseReturn(res, 404, {
-          error: "Product with such slug was not found",
+          error: "Товар не знайдено",
         });
       }
 
@@ -182,7 +182,7 @@ class homeController {
         .select("name");
 
       if (!category) {
-        return responseReturn(res, 404, { error: "Category not found" });
+        return responseReturn(res, 404, { error: "Категорію не знайдено" });
       }
       // console.log(category);
 
@@ -231,7 +231,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: get_product_details:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }
@@ -263,7 +263,7 @@ class homeController {
     try {
       if (!productId || !rating || !review) {
         return responseReturn(res, 400, {
-          error: "productId, rating і review є обов'язковими",
+          error: "productId, rating та review є обов'язковими",
         });
       }
 
@@ -275,7 +275,11 @@ class homeController {
         .findOne({
           customerId,
           delivery_status: "delivered",
-          "products.productInfo._id": productId,
+          $or: [
+            { "products._id": new ObjectId(productId) },
+            { "products._id": productId },
+            { "products.productInfo._id": productId },
+          ],
         })
         .sort({ createdAt: -1 });
 
@@ -317,7 +321,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: submit_review:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }
@@ -333,7 +337,11 @@ class homeController {
       const deliveredOrder = await customerOrderModel.findOne({
         customerId,
         delivery_status: "delivered",
-        "products.productInfo._id": productId,
+        $or: [
+          { "products._id": new ObjectId(productId) },
+          { "products._id": productId },
+          { "products.productInfo._id": productId },
+        ],
       });
 
       const existingReview = await reviewModel.findOne({
@@ -348,7 +356,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: can_review:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }
@@ -416,7 +424,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: get_reviews:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }
@@ -456,7 +464,7 @@ class homeController {
     } catch (error) {
       console.error("💥 Error in homeController: admin_get_reviews:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }
@@ -499,7 +507,7 @@ class homeController {
         error
       );
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   };

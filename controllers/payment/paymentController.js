@@ -114,7 +114,7 @@ class paymentController {
     // URL і побачити чийсь баланс/виплати. Дозволяємо самому продавцю (свій
     // sellerId) або адміну (будь-який).
     if (req.role !== "admin" && req.id !== sellerId) {
-      return responseReturn(res, 403, { error: "Access denied" });
+      return responseReturn(res, 403, { error: "Доступ заборонено" });
     }
 
     try {

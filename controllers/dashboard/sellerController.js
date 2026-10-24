@@ -34,7 +34,7 @@ class sellerController {
     } catch (error) {
       console.error("💥 Error in sellerController request_seller_get:", error);
       responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   };
@@ -48,7 +48,7 @@ class sellerController {
     } catch (error) {
       console.error("💥 Error in sellerController get_seller:", error);
       responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   };
@@ -61,7 +61,7 @@ class sellerController {
       const seller = await sellerModel.findById(sellerId);
       responseReturn(res, 200, {
         seller,
-        message: "Seller status updated successfully ✅",
+        message: "Статус продавця успішно оновлено ✅",
       });
     } catch (error) {
       console.error(
@@ -69,7 +69,7 @@ class sellerController {
         error
       );
       responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   };

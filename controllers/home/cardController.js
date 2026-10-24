@@ -28,7 +28,7 @@ class cardController {
         ],
       });
       if (product) {
-        responseReturn(res, 404, { error: "Product already added to card" });
+        responseReturn(res, 404, { error: "Товар уже в кошику" });
       } else {
         const product = await cardModel.create({
           userId,
@@ -37,14 +37,14 @@ class cardController {
         });
 
         responseReturn(res, 201, {
-          message: "Added to card successfully",
+          message: "Товар додано до кошика",
           product,
         });
       }
     } catch (error) {
       console.error("💥 Error in cardController: add_to_card:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   };
@@ -157,7 +157,7 @@ class cardController {
     } catch (error) {
       console.error("💥 Error in cardController: get_card_products:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }
@@ -168,12 +168,12 @@ class cardController {
     try {
       await cardModel.findByIdAndDelete(card_id);
       responseReturn(res, 200, {
-        message: "Product removed successfully",
+        message: "Товар видалено з кошика",
       });
     } catch (error) {
       console.error("💥 Error in cardController: delete_card_product:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }
@@ -182,23 +182,23 @@ class cardController {
     const { card_id } = req.params;
     // console.log(card_id);
     if (!mongoose.Types.ObjectId.isValid(card_id)) {
-      return responseReturn(res, 400, { error: "Invalid card ID" });
+      return responseReturn(res, 400, { error: "Некоректний ідентифікатор кошика" });
     }
 
     try {
       const product = await cardModel.findById(card_id);
       if (!product) {
-        return responseReturn(res, 404, { error: "Product not found in cart" });
+        return responseReturn(res, 404, { error: "Товар не знайдено в кошику" });
       }
       const { quantity } = product;
       await cardModel.findByIdAndUpdate(card_id, { quantity: quantity + 1 });
       responseReturn(res, 200, {
-        message: "Qty updated successfully",
+        message: "Кількість оновлено",
       });
     } catch (error) {
       console.error("💥 Error in cardController: quantity_inc:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }
@@ -207,23 +207,23 @@ class cardController {
     const { card_id } = req.params;
     // console.log(card_id);
     if (!mongoose.Types.ObjectId.isValid(card_id)) {
-      return responseReturn(res, 400, { error: "Invalid card ID" });
+      return responseReturn(res, 400, { error: "Некоректний ідентифікатор кошика" });
     }
 
     try {
       const product = await cardModel.findById(card_id);
       if (!product) {
-        return responseReturn(res, 404, { error: "Product not found in cart" });
+        return responseReturn(res, 404, { error: "Товар не знайдено в кошику" });
       }
       const { quantity } = product;
       await cardModel.findByIdAndUpdate(card_id, { quantity: quantity - 1 });
       responseReturn(res, 200, {
-        message: "Qty updated successfully",
+        message: "Кількість оновлено",
       });
     } catch (error) {
       console.error("💥 Error in cardController: quantity_dec:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }
@@ -235,18 +235,18 @@ class cardController {
       const product = await wishlistModel.findOne({ slugBase });
       if (product) {
         responseReturn(res, 404, {
-          error: "Product is already in widhlist",
+          error: "Товар уже в списку бажань",
         });
       } else {
         await wishlistModel.create(req.body);
         responseReturn(res, 201, {
-          message: "Product added to wishlist successfully",
+          message: "Товар додано до списку бажань",
         });
       }
     } catch (error) {
       console.error("💥 Error in cardController: add_wishlist:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }
@@ -266,7 +266,7 @@ class cardController {
     } catch (error) {
       console.error("💥 Error in cardController: get_wishlist:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }
@@ -276,22 +276,22 @@ class cardController {
 
     const { wishlistId } = req.params;
     if (!mongoose.Types.ObjectId.isValid(wishlistId)) {
-      return responseReturn(res, 404, { error: "Invalid wishlist item ID" });
+      return responseReturn(res, 404, { error: "Некоректний ідентифікатор елемента списку бажань" });
     }
 
     try {
       const wishlist = await wishlistModel.findByIdAndDelete(wishlistId);
       if (!wishlist) {
-        return responseReturn(res, 404, { error: "Wishlist item not found" });
+        return responseReturn(res, 404, { error: "Елемент списку бажань не знайдено" });
       }
       responseReturn(res, 200, {
-        message: "Product removed from wishlist",
+        message: "Товар видалено зі списку бажань",
         wishlistId,
       });
     } catch (error) {
       console.error("💥 Error in cardController: remove_wishlist:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: error.message || "Щось пішло не так",
       });
     }
   }

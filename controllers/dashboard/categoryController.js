@@ -18,7 +18,7 @@ class categoryController {
     const form = new IncomingForm();
     form.parse(req, async (err, fields, files) => {
       if (err) {
-        return responseReturn(res, 400, { error: "😢 Parse error" });
+        return responseReturn(res, 400, { error: "😢 Помилка обробки форми" });
       }
 
       let { name } = fields;
@@ -29,13 +29,13 @@ class categoryController {
 
       if (!name || !image) {
         return responseReturn(res, 400, {
-          error: "Name and image are required",
+          error: "Назва та зображення обов'язкові",
         });
       }
 
       if (!image.filepath) {
         return responseReturn(res, 400, {
-          error: "No valid image file provided",
+          error: "Некоректний файл зображення",
         });
       }
 
@@ -52,7 +52,7 @@ class categoryController {
         const existing = await categoryModel.findOne({ name });
         if (existing) {
           return responseReturn(res, 400, {
-            error: "Category with this name already exists",
+            error: "Категорія з такою назвою вже існує",
           });
         }
 
@@ -71,17 +71,17 @@ class categoryController {
           });
           return responseReturn(res, 201, {
             category,
-            message: "Category added successfully 🫡",
+            message: "Категорію успішно додано 🫡",
           });
         } else {
           return responseReturn(res, 500, {
-            error: "😢 Image upload failed...",
+            error: "😢 Не вдалося завантажити зображення...",
           });
         }
       } catch (error) {
         console.error("❌ Error in add_category:", error);
         return responseReturn(res, 500, {
-          error: "🤖 Internal server error...",
+          error: "🤖 Внутрішня помилка сервера...",
         });
       }
     });
@@ -125,7 +125,7 @@ class categoryController {
       }
     } catch (error) {
       console.error("💥 categoryController: get_category error:", error);
-      responseReturn(res, 500, { error: "Internal server error" });
+      responseReturn(res, 500, { error: "Внутрішня помилка сервера" });
     }
   };
 
@@ -133,7 +133,7 @@ class categoryController {
     const form = new IncomingForm();
     form.parse(req, async (err, fields, files) => {
       if (err) {
-        return responseReturn(res, 400, { error: "😢 Parse error" });
+        return responseReturn(res, 400, { error: "😢 Помилка обробки форми" });
       }
 
       let { name } = fields;
