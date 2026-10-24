@@ -35,15 +35,15 @@ class authControllers {
             sameSite: 'none',
             maxAge: process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
           });
-          responseReturn(res, 200, { token, message: 'Login Success' });
+          responseReturn(res, 200, { token, message: 'Вхід виконано успішно' });
         } else {
-          responseReturn(res, 404, { error: 'Password is wrong! Try again' });
+          responseReturn(res, 404, { error: 'Невірний пароль. Спробуйте ще раз' });
         }
       } else {
-        responseReturn(res, 404, { error: 'Email not found' });
+        responseReturn(res, 404, { error: 'Email не знайдено' });
       }
     } catch (error) {
-      responseReturn(res, 500, { error: error.message });
+      responseReturn(res, 500, { error: "Щось пішло не так" });
     }
   }
 
@@ -66,17 +66,17 @@ class authControllers {
             sameSite: 'none',
             maxAge: process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
           });
-          responseReturn(res, 200, { token, message: 'Login Success ✔️' });
+          responseReturn(res, 200, { token, message: 'Вхід виконано успішно ✔️' });
         } else {
           responseReturn(res, 404, {
-            error: '💥 Wrong Password! Try again',
+            error: '💥 Невірний пароль! Спробуйте ще раз',
           });
         }
       } else {
-        responseReturn(res, 404, { error: 'Email not found' });
+        responseReturn(res, 404, { error: 'Email не знайдено' });
       }
     } catch (error) {
-      responseReturn(res, 500, { error: error.message });
+      responseReturn(res, 500, { error: "Щось пішло не так" });
     }
   };
 
@@ -85,7 +85,7 @@ class authControllers {
     try {
       const getUser = await sellerModel.findOne({ email });
       if (getUser) {
-        responseReturn(res, 404, { error: 'Email Already Exists...' });
+        responseReturn(res, 404, { error: 'Користувач з таким Email вже існує' });
       } else {
         const saltRounds = parseInt(process.env.SALT_ROUNDS) || 10;
         const seller = await sellerModel.create({
@@ -110,11 +110,11 @@ class authControllers {
         });
         responseReturn(res, 201, {
           token,
-          message: 'Registration Successful ✔️',
+          message: 'Реєстрація успішна ✔️',
         });
       }
     } catch (error) {
-      responseReturn(res, 500, { error: 'Internal Server Error 🤖' });
+      responseReturn(res, 500, { error: 'Внутрішня помилка сервера 🤖' });
     }
   };
 
@@ -129,7 +129,7 @@ class authControllers {
         responseReturn(res, 200, { userInfo: seller });
       }
     } catch (error) {
-      responseReturn(res, 500, { error: 'Internal Server Error 🤖' });
+      responseReturn(res, 500, { error: 'Внутрішня помилка сервера 🤖' });
     }
   };
 
@@ -144,12 +144,12 @@ class authControllers {
 
     form.parse(req, async (err, _, files) => {
       if (err) {
-        console.error('❌ Parse error:', err);
-        return responseReturn(res, 400, { error: 'Parse error' });
+        console.error('❌ Помилка обробки форми:', err);
+        return responseReturn(res, 400, { error: 'Помилка обробки форми' });
       }
 
       if (!files.image) {
-        return responseReturn(res, 400, { error: 'No image file uploaded' });
+        return responseReturn(res, 400, { error: 'Зображення не завантажено' });
       }
 
       const imageRaw = files.image;
@@ -160,20 +160,20 @@ class authControllers {
         });
 
         if (!result || !result.url) {
-          return responseReturn(res, 500, { error: 'Image upload failed' });
+          return responseReturn(res, 500, { error: 'Не вдалося завантажити зображення' });
         }
         await sellerModel.findByIdAndUpdate(id, {
           image: result.url,
         });
         const userInfo = await sellerModel.findById(id);
         return responseReturn(res, 200, {
-          message: 'Profile image uploaded successfully 👍',
+          message: 'Фото профілю завантажено 👍',
           userInfo,
         });
       } catch (error) {
         console.error('❌ Error in profile_image_upload:', error);
         return responseReturn(res, 500, {
-          error: error.message || 'Something went wrong',
+          error: "Щось пішло не так",
         });
       }
     });
@@ -194,13 +194,13 @@ class authControllers {
       });
       const userInfo = await sellerModel.findById(id);
       return responseReturn(res, 201, {
-        message: 'Profile info added successfully 👍',
+        message: 'Інформацію профілю збережено 👍',
         userInfo,
       });
     } catch (error) {
       console.error('❌ Error in profile_info_add:', error);
       return responseReturn(res, 500, {
-        error: error.message || 'Something went wrong',
+        error: "Щось пішло не так",
       });
     }
   };
@@ -212,7 +212,7 @@ class authControllers {
         httpOnly: true,
       });
       return responseReturn(res, 200, {
-        message: 'Logout successfully 👍',
+        message: 'Ви успішно вийшли 👍',
       });
     } catch (error) {
       return handleError(res, error, 'authController → logout');

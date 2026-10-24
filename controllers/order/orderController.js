@@ -6,6 +6,7 @@ const customerOrderModel = require("../../models/customerOrderModel");
 const myShopWallet = require("../../models/myShopWallet");
 const sellerWallet = require("../../models/sellerWallet");
 const cardModel = require("../../models/cardModel");
+const productModel = require("../../models/productModel");
 const handleError = require("../../utiles/handleError");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const mongoose = require("mongoose");
@@ -40,65 +41,126 @@ class orderController {
 
   async place_order(req, res) {
     // console.log(req.body);
-    const { price, products, shipping_fee, shippingInfo, userId } = req.body;
-    let authorOrderData = [];
-    let cardProductsId = [];
-    const tempDate = moment(Date.now()).format("LLL");
-    // console.log(tempDate);
+    const { products, shipping_fee, shippingInfo } = req.body;
+    // customerId завжди з токена (customerAuthMiddleware), а НЕ з тіла запиту —
+    // раніше клієнт міг підставити чужий userId.
+    const userId = req.id;
 
-    let customerOrderProducts = [];
-
-    for (let i = 0; i < products.length; i++) {
-      const productsPerSeller = products[i].products;
-      for (let j = 0; j < productsPerSeller.length; j++) {
-        const tempCustomerProduct = productsPerSeller[j].productInfo;
-        // console.log(tempCustomerProduct);
-        tempCustomerProduct.quantity = productsPerSeller[j].quantity;
-        customerOrderProducts.push(tempCustomerProduct);
-        if (productsPerSeller[j]._id) {
-          cardProductsId.push(productsPerSeller[j]._id);
-        }
-      }
+    if (!Array.isArray(products) || products.length === 0) {
+      return responseReturn(res, 400, { error: "Кошик порожній" });
     }
-    // console.log(customerOrderProducts);
-    // console.log(cardProductsId);
+
+    const numericShippingFee = Number(shipping_fee);
+    if (!Number.isFinite(numericShippingFee) || numericShippingFee < 0) {
+      return responseReturn(res, 400, {
+        error: "Некоректна вартість доставки",
+      });
+    }
+
+    const tempDate = moment(Date.now()).format("LLL");
 
     try {
+      // Зібрати всі id товарів і підвантажити РЕАЛЬНІ дані з БД. Раніше price,
+      // discount і навіть sellerId бралися напряму з тіла запиту — клієнт міг
+      // вписати будь-яку ціну чи чужий sellerId (щоб гроші пішли не тому продавцю).
+      const allProductIds = [];
+      for (const sellerGroup of products) {
+        for (const item of sellerGroup?.products || []) {
+          if (item?.productInfo?._id) allProductIds.push(item.productInfo._id);
+        }
+      }
+
+      const dbProducts = await productModel.find({
+        _id: { $in: allProductIds },
+      });
+      const dbProductMap = new Map(
+        dbProducts.map((p) => [p._id.toString(), p])
+      );
+
+      let authorOrderData = [];
+      let customerOrderProducts = [];
+      let cardProductsId = [];
+      let totalPrice = 0;
+
+      for (const sellerGroup of products) {
+        let sellerTotal = 0;
+        let storeProducts = [];
+        let sellerId = null;
+
+        for (const item of sellerGroup?.products || []) {
+          const dbProduct = dbProductMap.get(item?.productInfo?._id);
+          if (!dbProduct) {
+            return responseReturn(res, 400, {
+              error: "Один з товарів не знайдено — оновіть кошик",
+            });
+          }
+
+          const quantity = Number(item.quantity);
+          if (!Number.isInteger(quantity) || quantity < 1) {
+            return responseReturn(res, 400, {
+              error: "Некоректна кількість товару",
+            });
+          }
+          if (quantity > dbProduct.stock) {
+            return responseReturn(res, 400, {
+              error: `Недостатньо товару "${dbProduct.name}" на складі`,
+            });
+          }
+
+          const unitPrice =
+            dbProduct.price -
+            Math.floor((dbProduct.price * dbProduct.discount) / 100);
+
+          const orderedProduct = {
+            _id: dbProduct._id,
+            name: dbProduct.name,
+            price: dbProduct.price,
+            discount: dbProduct.discount,
+            images: dbProduct.images,
+            sellerId: dbProduct.sellerId,
+            quantity,
+          };
+
+          storeProducts.push(orderedProduct);
+          customerOrderProducts.push(orderedProduct);
+          sellerTotal += unitPrice * quantity;
+          sellerId = dbProduct.sellerId;
+
+          if (item._id) cardProductsId.push(item._id);
+        }
+
+        totalPrice += sellerTotal;
+        authorOrderData.push({
+          sellerId,
+          products: storeProducts,
+          price: sellerTotal,
+        });
+      }
+
+      const finalPrice = totalPrice + numericShippingFee;
+
       const order = await customerOrderModel.create({
         customerId: userId,
         shippingInfo,
         products: customerOrderProducts,
-        price: price + shipping_fee,
+        price: finalPrice,
         payment_status: "unpaid",
         delivery_status: "pending",
         date: tempDate,
       });
 
-      for (let i = 0; i < products.length; i++) {
-        const productsPerSeller = products[i].products;
-        const pricePerSeller = products[i].price;
-        const sellerId = products[i].sellerId;
-        let storeProducts = [];
-        for (let j = 0; j < productsPerSeller.length; j++) {
-          const tempProduct = productsPerSeller[j].productInfo;
-          tempProduct.quantity = productsPerSeller[j].quantity;
-          storeProducts.push(tempProduct);
-        }
-        authorOrderData.push({
-          orderId: order.id,
-          sellerId,
-          products: storeProducts,
-          price: pricePerSeller,
-          payment_status: "unpaid",
-          shippingInfo: "Easy Main Warehouse",
-          delivery_status: "pending",
-          date: tempDate,
-        });
-      }
+      authorOrderData = authorOrderData.map((sellerOrder) => ({
+        ...sellerOrder,
+        orderId: order.id,
+        payment_status: "unpaid",
+        shippingInfo: "Easy Main Warehouse",
+        delivery_status: "pending",
+        date: tempDate,
+      }));
 
       await authorOrderModel.insertMany(authorOrderData);
-      for (let k = 0; k < cardProductsId.length; k++) {
-        await cardModel.findByIdAndDelete(cardProductsId[k]);
+      for (const cardId of cardProductsId) {
+        await cardModel.findByIdAndDelete(cardId);
       }
 
       setTimeout(async () => {
@@ -113,13 +175,13 @@ class orderController {
       }, process.env.ORDER_PAYMENT_CHECK_IN * 60 * 60 * 24 * 1000);
 
       responseReturn(res, 200, {
-        message: "Order placed successfully",
+        message: "Замовлення успішно оформлено",
         orderId: order.id,
       });
     } catch (error) {
       console.error("💥 Error in orderController: place_order:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -127,6 +189,10 @@ class orderController {
   async get_customer_dashboard_data(req, res) {
     // console.log(req.params);
     const { userId } = req.params;
+    // Клієнт міг раніше підставити чужий userId в URL і побачити чужі замовлення.
+    if (req.id !== userId) {
+      return responseReturn(res, 403, { error: "Доступ заборонено" });
+    }
     try {
       const recentOrdersLimit =
         Number(process.env.USER_DASHBOARD_RECENT_ORDERS_LIMIT) || 5;
@@ -165,7 +231,7 @@ class orderController {
         error
       );
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -175,7 +241,12 @@ class orderController {
     const { customerId, status = "all" } = req.params;
 
     if (!ObjectId.isValid(customerId)) {
-      return responseReturn(res, 404, { error: "Invalid customerId" });
+      return responseReturn(res, 404, { error: "Некоректний customerId" });
+    }
+    // Раніше будь-хто залогінений як клієнт міг підставити чужий customerId і
+    // побачити чиїсь замовлення.
+    if (req.id !== customerId) {
+      return responseReturn(res, 403, { error: "Доступ заборонено" });
     }
 
     try {
@@ -197,7 +268,7 @@ class orderController {
     } catch (error) {
       console.error("💥 Error in orderController: get_orders:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -209,6 +280,14 @@ class orderController {
 
     try {
       const order = await customerOrderModel.findById(orderId);
+      if (!order) {
+        return responseReturn(res, 404, { error: "Замовлення не знайдено" });
+      }
+      // Раніше будь-хто залогінений як клієнт міг підставити чужий orderId і
+      // прочитати чиїсь ПІБ/адресу/склад замовлення.
+      if (order.customerId.toString() !== req.id) {
+        return responseReturn(res, 403, { error: "Доступ заборонено" });
+      }
 
       responseReturn(res, 200, {
         order,
@@ -216,7 +295,7 @@ class orderController {
     } catch (error) {
       console.error("💥 Error in orderController: get_orders_details:", error);
       return responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
     }
   }
@@ -337,6 +416,12 @@ class orderController {
     // console.log(sellerId);
     // console.log(req.query);
 
+    // Раніше один продавець міг підставити чужий sellerId в URL і побачити
+    // замовлення іншого продавця.
+    if (req.id !== sellerId) {
+      return responseReturn(res, 403, { error: "Доступ заборонено" });
+    }
+
     let { page = 1, searchValue = "", perPage = 10 } = req.query;
     page = parseInt(page);
     perPage = parseInt(perPage);
@@ -375,6 +460,14 @@ class orderController {
 
     try {
       const order = await authorOrderModel.findById(orderId);
+      if (!order) {
+        return responseReturn(res, 404, { error: "Замовлення не знайдено" });
+      }
+      // Раніше продавець міг підставити чужий orderId і прочитати замовлення
+      // іншого продавця.
+      if (order.sellerId.toString() !== req.id) {
+        return responseReturn(res, 403, { error: "Доступ заборонено" });
+      }
 
       return responseReturn(res, 200, { order });
     } catch (error) {
@@ -398,6 +491,15 @@ class orderController {
     // console.log(status);
 
     try {
+      const order = await authorOrderModel.findById(orderId);
+      if (!order) {
+        return responseReturn(res, 404, { error: "Замовлення не знайдено" });
+      }
+      // Раніше продавець міг змінити статус чужого замовлення.
+      if (order.sellerId.toString() !== req.id) {
+        return responseReturn(res, 403, { error: "Доступ заборонено" });
+      }
+
       await authorOrderModel.findByIdAndUpdate(orderId, {
         delivery_status: status,
       });
@@ -437,7 +539,7 @@ class orderController {
       responseReturn(res, 200, { clientSecret: payment.client_secret });
     } catch (error) {
       console.log("Stripe error:", error.message);
-      responseReturn(res, 500, { error: error.message });
+      responseReturn(res, 500, { error: "Щось пішло не так" });
     }
   }
 
@@ -446,6 +548,18 @@ class orderController {
     // console.log(orderId);
 
     try {
+      const existingOrder = await customerOrderModel.findById(orderId);
+      if (!existingOrder) {
+        return responseReturn(res, 404, { error: "Замовлення не знайдено" });
+      }
+      // Захист від подвійного нарахування, якщо адмін (чи повторний запит)
+      // викличе підтвердження оплати для вже підтвердженого замовлення.
+      if (existingOrder.payment_status === "paid") {
+        return responseReturn(res, 400, {
+          error: "Це замовлення вже підтверджено як оплачене",
+        });
+      }
+
       await customerOrderModel.findByIdAndUpdate(orderId, {
         payment_status: "paid",
       });

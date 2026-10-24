@@ -11,7 +11,7 @@ class customerAuthController {
     try {
       const customer = await customerModel.findOne({ email });
       if (customer) {
-        return responseReturn(res, 404, { error: 'Email already exists' });
+        return responseReturn(res, 404, { error: 'Користувач з таким Email вже існує' });
       } else {
         const createdCustomer = await customerModel.create({
           name: name.trim(),
@@ -25,6 +25,7 @@ class customerAuthController {
         });
         const token = await createToken({
           id: createdCustomer.id,
+          role: 'customer',
           name: createdCustomer.name,
           email: createdCustomer.email,
           phone: createdCustomer.phone,
@@ -32,14 +33,14 @@ class customerAuthController {
         });
 
         res.cookie('customerToken', token, {
-          expires: new Date(
-            Date.now() +
-              process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
-          ),
+          httpOnly: true,
+          secure: true,
+          sameSite: 'none',
+          maxAge: process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
         });
         responseReturn(res, 200, {
           token,
-          message: 'User registration successful',
+          message: 'Реєстрацію успішно завершено',
         });
       }
     } catch (error) {
@@ -48,7 +49,7 @@ class customerAuthController {
         error,
       );
       return responseReturn(res, 500, {
-        error: error.message || 'Something went wrong',
+        error: "Щось пішло не так",
       });
     }
   };
@@ -65,29 +66,30 @@ class customerAuthController {
         if (match) {
           const token = await createToken({
             id: customer.id,
+            role: 'customer',
             name: customer.name,
             email: customer.email,
             phone: customer.phone,
             method: customer.method,
           });
           res.cookie('customerToken', token, {
-            expires: new Date(
-              Date.now() +
-                process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
-            ),
+            httpOnly: true,
+            secure: true,
+            sameSite: 'none',
+            maxAge: process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
           });
           return responseReturn(res, 201, {
             token,
-            message: 'User login successful',
+            message: 'Вхід виконано успішно',
           });
         } else {
           return responseReturn(res, 404, {
-            error: 'Password wrong',
+            error: 'Невірний пароль',
           });
         }
       } else {
         return responseReturn(res, 404, {
-          error: 'Email not found',
+          error: 'Email не знайдено',
         });
       }
     } catch (error) {
@@ -96,18 +98,21 @@ class customerAuthController {
         error,
       );
       return responseReturn(res, 500, {
-        error: error.message || 'Something went wrong',
+        error: "Щось пішло не так",
       });
     }
   };
 
   async customer_logout(req, res) {
     res.cookie('customerToken', '', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
       expires: new Date(Date.now()),
     });
 
     return responseReturn(res, 200, {
-      message: 'Logout successful',
+      message: 'Ви успішно вийшли',
     });
   }
 }

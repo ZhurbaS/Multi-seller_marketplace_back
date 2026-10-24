@@ -130,16 +130,16 @@ class dashboardController {
       const mainbanRaw = files.mainban;
       const mainban = Array.isArray(mainbanRaw) ? mainbanRaw[0] : mainbanRaw;
       if (err) {
-        return responseReturn(res, 400, { error: "😢 Parse error" });
+        return responseReturn(res, 400, { error: "😢 Помилка обробки форми" });
       }
       if (!productId || !mainban) {
         return responseReturn(res, 400, {
-          error: "ProductId and image are required",
+          error: "Потрібні товар і зображення",
         });
       }
       if (!mainban.filepath) {
         return responseReturn(res, 400, {
-          error: "No valid banner file provided",
+          error: "Некоректний файл банера",
         });
       }
       // console.log(productIdRaw);
@@ -207,16 +207,16 @@ class dashboardController {
       mainban = Array.isArray(mainban) ? mainban[0] : mainban;
       // console.log(mainban);
       if (err) {
-        return responseReturn(res, 400, { error: "😢 Parse error" });
+        return responseReturn(res, 400, { error: "😢 Помилка обробки форми" });
       }
       if (!mainban) {
         return responseReturn(res, 400, {
-          error: "Mainban is required",
+          error: "Потрібен ідентифікатор банера",
         });
       }
       if (!mainban.filepath) {
         return responseReturn(res, 400, {
-          error: "No valid banner file provided",
+          error: "Некоректний файл банера",
         });
       }
       try {

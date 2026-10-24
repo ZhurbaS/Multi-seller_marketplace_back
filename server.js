@@ -11,11 +11,19 @@ const { dbConnect } = require("./utiles/db");
 const app = express();
 const server = http.createServer(app);
 
+// Додаткові дозволені адреси (Codespaces тощо) беруться з .env — через кому,
+// без пробілів і без слеша в кінці. Редагувати server.js для цього не потрібно.
+const extraOrigins = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+
 const allowedOrigins =
   process.env.NODE_ENV === "production"
     ? [
         process.env.client_customer_production_url,
         process.env.client_admin_production_url,
+        ...extraOrigins,
       ]
     : [
         "http://localhost:5173",
@@ -23,7 +31,26 @@ const allowedOrigins =
         "http://localhost:5000",
         "http://localhost:5001",
         "http://localhost:5002",
+        ...extraOrigins,
       ];
+
+// Попередження на старті: заглушки в .env призводять до неочевидних помилок
+// (наприклад, Cloudinary з CLOUD_NAME=dummy відповідає «Too many concurrent requests»).
+const looksLikePlaceholder = (v) => !v || /^(dummy|sk_test_dummy|changeme)$/i.test(v);
+if (
+  looksLikePlaceholder(process.env.CLOUD_NAME) ||
+  looksLikePlaceholder(process.env.API_KEY) ||
+  looksLikePlaceholder(process.env.API_SECRET)
+) {
+  console.warn(
+    "⚠️  Cloudinary не налаштовано (CLOUD_NAME/API_KEY/API_SECRET порожні або dummy): завантаження фото товарів не працюватиме. Див. SETUP.md."
+  );
+}
+if (process.env.NODE_ENV !== "production" && extraOrigins.length === 0) {
+  console.warn(
+    "ℹ️  ALLOWED_ORIGINS порожній: у Codespaces додайте адреси фронта й дашборду в .env, інакше браузер заблокує запити (CORS). Див. SETUP.md."
+  );
+}
 
 app.use(bodyParser.json());
 app.use(cookieParser());

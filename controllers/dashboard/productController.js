@@ -4,6 +4,10 @@ const slugify = require("slugify");
 const { nanoid } = require("nanoid");
 const { IncomingForm } = require("formidable");
 const productModel = require("../../models/productModel");
+const cardModel = require("../../models/cardModel");
+const wishlistModel = require("../../models/wishlistModel");
+const reviewModel = require("../../models/reviewModel");
+const bannerModel = require("../../models/bannerModel");
 const mongoose = require("mongoose");
 cloudinary.config({
   cloud_name: process.env.CLOUD_NAME,
@@ -11,6 +15,36 @@ cloudinary.config({
   api_secret: process.env.API_SECRET,
   secure: true,
 });
+
+// Cloudinary повертає http_code 420 (або 429), коли перевищено ліміт запитів.
+// Завантажуємо зображення по одному й повторюємо спробу з наростаючою
+// затримкою (1с, 2с, 4с), щоб кілька фото поспіль не ламали додавання товару.
+const uploadImageWithRetry = async (filepath, options = {}) => {
+  const delays = [1000, 2000, 4000];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await cloudinary.uploader.upload(filepath, options);
+    } catch (error) {
+      const rateLimited = error?.http_code === 420 || error?.http_code === 429;
+      if (!rateLimited || attempt >= delays.length) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+    }
+  }
+};
+
+const isCloudinaryRateLimit = (error) =>
+  error?.http_code === 420 || error?.http_code === 429;
+
+const RATE_LIMIT_MESSAGE =
+  "Сервіс зображень тимчасово перевантажений. Зачекайте хвилину і спробуйте ще раз (або додайте менше фото).";
+
+// Витягує public_id з URL Cloudinary:
+// https://res.cloudinary.com/<cloud>/image/upload/v123/products/abc.jpg -> "products/abc"
+const getCloudinaryPublicId = (url) => {
+  if (typeof url !== "string") return null;
+  const match = url.match(/\/upload\/(?:v\d+\/)?(.+)\.[a-zA-Z0-9]+$/);
+  return match ? match[1] : null;
+};
 
 // Допоміжна функція для отримання "першого значення" поля
 const getFieldValue = (field) =>
@@ -46,8 +80,8 @@ class productController {
 
     form.parse(req, async (err, fields, files) => {
       if (err) {
-        console.error("❌ Parse error:", err);
-        return responseReturn(res, 400, { error: "Parse error" });
+        console.error("❌ Помилка обробки форми:", err);
+        return responseReturn(res, 400, { error: "Помилка обробки форми" });
       }
 
       try {
@@ -72,7 +106,7 @@ class productController {
         // console.log("Received category:", fields.category);
 
         if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-          return responseReturn(res, 400, { error: "Invalid category ID" });
+          return responseReturn(res, 400, { error: "Некоректний ідентифікатор категорії" });
         }
         const description = getFieldValue(fields.description).trim();
         const stock = parseInt(getFieldValue(fields.stock)) || 0;
@@ -80,6 +114,29 @@ class productController {
         const brand = getFieldValue(fields.brand).trim();
         const price = parseInt(getFieldValue(fields.price)) || 0;
         const shopName = getFieldValue(fields.shopName).trim();
+
+        // Характеристики — необов'язкове поле, приходить як JSON-рядок
+        // (FormData не вміє передавати масиви об'єктів напряму). Порожні
+        // рядки (продавець додав рядок, але нічого не вписав) відфільтровуємо.
+        let specifications = [];
+        const rawSpecifications = getFieldValue(fields.specifications);
+        if (rawSpecifications) {
+          try {
+            const parsed = JSON.parse(rawSpecifications);
+            if (Array.isArray(parsed)) {
+              specifications = parsed
+                .map((s) => ({
+                  key: String(s.key || "").trim(),
+                  value: String(s.value || "").trim(),
+                }))
+                .filter((s) => s.key && s.value);
+            }
+          } catch {
+            return responseReturn(res, 400, {
+              error: "Некоректний формат характеристик",
+            });
+          }
+        }
 
         const slugBase = slugify(name, {
           lower: true,
@@ -97,7 +154,7 @@ class productController {
           : [];
         const allImageUrl = [];
         for (let img of imageArray) {
-          const result = await cloudinary.uploader.upload(img.filepath, {
+          const result = await uploadImageWithRetry(img.filepath, {
             folder: "products",
           });
           allImageUrl.push(result.url);
@@ -117,16 +174,20 @@ class productController {
           discount,
           description,
           images: allImageUrl,
+          specifications,
         });
 
         return responseReturn(res, 201, {
-          message: "Product added successfully 🫡",
+          message: "Товар успішно додано 🫡",
           product: newProduct,
         });
       } catch (error) {
         console.error("❌ Error in add_product:", error);
+        if (isCloudinaryRateLimit(error)) {
+          return responseReturn(res, 429, { error: RATE_LIMIT_MESSAGE });
+        }
         return responseReturn(res, 500, {
-          error: error.message || "Something went wrong",
+          error: "Щось пішло не так",
         });
       }
     });
@@ -158,27 +219,31 @@ class productController {
     } catch (error) {
       console.log(error.message);
       responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
     }
   };
 
   product_get = async (req, res) => {
     const { productId } = req.params;
-    // console.log(productId);
     try {
       const product = await productModel
         .findById(productId)
         .populate("category");
 
       if (!product) {
-        return responseReturn(res, 404, { error: "Product not found" });
+        return responseReturn(res, 404, { error: "Товар не знайдено" });
+      }
+      // Раніше будь-який залогінений продавець міг переглянути чужий товар
+      // за productId. Дозволяємо власнику товару або адміну.
+      if (req.role !== "admin" && product.sellerId.toString() !== req.id) {
+        return responseReturn(res, 403, { error: "Доступ заборонено" });
       }
       responseReturn(res, 200, { product });
     } catch (error) {
       console.log(error.message);
       responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
     }
   };
@@ -194,13 +259,27 @@ class productController {
         price,
         category,
         productId,
+        specifications,
       } = req.body;
 
       if (!productId) {
-        return responseReturn(res, 400, { error: "Product ID is required" });
+        return responseReturn(res, 400, { error: "Потрібен ідентифікатор товару" });
       }
       if (!name) {
-        return responseReturn(res, 400, { error: "Name is required" });
+        return responseReturn(res, 400, { error: "Назва обов'язкова" });
+      }
+
+      // Раніше будь-який залогінений продавець міг оновити чужий товар,
+      // знаючи лише productId. Перевіряємо власника перед будь-якими змінами.
+      const existingProduct = await productModel.findById(productId);
+      if (!existingProduct) {
+        return responseReturn(res, 404, { error: "Товар не знайдено" });
+      }
+      if (
+        req.role !== "admin" &&
+        existingProduct.sellerId.toString() !== req.id
+      ) {
+        return responseReturn(res, 403, { error: "Доступ заборонено" });
       }
 
       name = name.trim();
@@ -229,24 +308,86 @@ class productController {
         updateData.category = category; // просто _id
       }
 
+      if (Array.isArray(specifications)) {
+        updateData.specifications = specifications
+          .map((s) => ({
+            key: String(s?.key || "").trim(),
+            value: String(s?.value || "").trim(),
+          }))
+          .filter((s) => s.key && s.value);
+      }
+
       // Використовуємо populate, щоб підвантажити дані категорії
       const product = await productModel
         .findByIdAndUpdate(productId, updateData, { new: true })
         .populate("category"); // тут ім’я поля категорії у схемі productModel
 
       if (!product) {
-        return responseReturn(res, 404, { error: "Product not found" });
+        return responseReturn(res, 404, { error: "Товар не знайдено" });
       }
 
       responseReturn(res, 200, {
         product,
-        message: "Product updated successfully 🫡",
+        message: "Товар успішно оновлено 🫡",
       });
     } catch (error) {
       console.error("❌ Error in product_update:", error);
       responseReturn(res, 500, {
-        error: error.message || "Something went wrong",
+        error: "Щось пішло не так",
       });
+    }
+  };
+
+  // Видалення товару: тільки власник (або адмін). Замовлення зберігають власний
+  // знімок товару (назва, ціна, фото), тому історія замовлень не ламається.
+  product_delete = async (req, res) => {
+    const { productId } = req.params;
+
+    try {
+      if (!mongoose.Types.ObjectId.isValid(productId)) {
+        return responseReturn(res, 400, {
+          error: "Некоректний ідентифікатор товару",
+        });
+      }
+
+      const product = await productModel.findById(productId);
+      if (!product) {
+        return responseReturn(res, 404, { error: "Товар не знайдено" });
+      }
+      if (req.role !== "admin" && product.sellerId.toString() !== req.id) {
+        return responseReturn(res, 403, { error: "Доступ заборонено" });
+      }
+
+      // Видаляємо фото з Cloudinary. Помилка видалення фото не блокує
+      // видалення товару: файл можна прибрати вручну, а товар уже не потрібен.
+      const publicIds = (Array.isArray(product.images) ? product.images : [])
+        .map(getCloudinaryPublicId)
+        .filter(Boolean);
+      for (const publicId of publicIds) {
+        try {
+          await cloudinary.uploader.destroy(publicId);
+        } catch (imgError) {
+          console.error("⚠️ Cloudinary destroy failed:", publicId, imgError);
+        }
+      }
+
+      // Прибираємо «осиротілі» записи, що посилаються на товар
+      await Promise.all([
+        cardModel.deleteMany({ productId }),
+        wishlistModel.deleteMany({ productId }),
+        reviewModel.deleteMany({ productId }),
+        bannerModel.deleteMany({ productId }),
+      ]);
+
+      await productModel.findByIdAndDelete(productId);
+
+      return responseReturn(res, 200, {
+        message: "Товар видалено",
+        productId,
+      });
+    } catch (error) {
+      console.error("❌ Error in product_delete:", error);
+      return responseReturn(res, 500, { error: "Щось пішло не так" });
     }
   };
 
@@ -262,8 +403,8 @@ class productController {
       // console.log("FILES: ", files);
 
       if (err) {
-        console.error("❌ Parse error:", err);
-        return responseReturn(res, 400, { error: "Parse error" });
+        console.error("❌ Помилка обробки форми:", err);
+        return responseReturn(res, 400, { error: "Помилка обробки форми" });
       }
 
       try {
@@ -285,14 +426,18 @@ class productController {
 
         if (!oldImage || newImageArray.length === 0) {
           return responseReturn(res, 400, {
-            error: "Old or new image was not provided",
+            error: "Не передано старе або нове зображення",
           });
         }
 
         // Отримуємо продукт
         const product = await productModel.findById(productId);
         if (!product) {
-          return responseReturn(res, 404, { error: "Product not found" });
+          return responseReturn(res, 404, { error: "Товар не знайдено" });
+        }
+        // Раніше будь-який залогінений продавець міг замінити фото чужого товару.
+        if (req.role !== "admin" && product.sellerId.toString() !== req.id) {
+          return responseReturn(res, 403, { error: "Доступ заборонено" });
         }
 
         let { images } = product;
@@ -301,20 +446,20 @@ class productController {
         const index = images.findIndex((img) => img === oldImage);
         if (index === -1) {
           return responseReturn(res, 404, {
-            error: "Old image not found in product",
+            error: "Старе зображення не знайдено в товарі",
           });
         }
 
         // Завантажуємо всі нові картинки
         const newUrls = [];
         for (let newImg of newImageArray) {
-          const result = await cloudinary.uploader.upload(newImg.filepath, {
+          const result = await uploadImageWithRetry(newImg.filepath, {
             folder: "products",
           });
 
           if (!result || !result.url) {
             return responseReturn(res, 500, {
-              error: "Error during image uploading",
+              error: "Помилка під час завантаження зображення",
             });
           }
 
@@ -330,12 +475,15 @@ class productController {
         const updatedProduct = await productModel.findById(productId);
         return responseReturn(res, 200, {
           product: updatedProduct,
-          message: `Image updated successfully 👍`,
+          message: `Зображення успішно оновлено 👍`,
         });
       } catch (error) {
         console.error("❌ Error in product_image_update:", error);
+        if (isCloudinaryRateLimit(error)) {
+          return responseReturn(res, 429, { error: RATE_LIMIT_MESSAGE });
+        }
         return responseReturn(res, 404, {
-          error: error.message || "Something went wrong",
+          error: "Щось пішло не так",
         });
       }
     });
