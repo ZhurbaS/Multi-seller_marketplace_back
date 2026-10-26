@@ -28,13 +28,9 @@ router.get(
   customerAuthMiddleware,
   orderController.get_orders_details
 );
-router.post(
-  "/order/create-payment",
-  customerAuthMiddleware,
-  orderController.create_payment
-);
-// Підтвердження оплати — лише адмін (ручна перевірка надходження коштів для MVP без Stripe).
-// Раніше цей роут був повністю публічним GET-запитом без жодної перевірки.
+// Оплата тепер у /api/pay/* (див. payRoutes.js). Старий небезпечний
+// /order/create-payment (Stripe, сума від клієнта) видалено.
+// Ручне підтвердження оплати — лише адмін (напр., переказ на рахунок).
 router.get(
   "/order/confirm/:orderId",
   authMiddleware,

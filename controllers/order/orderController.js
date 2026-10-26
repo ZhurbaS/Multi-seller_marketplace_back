@@ -8,19 +8,41 @@ const sellerWallet = require("../../models/sellerWallet");
 const cardModel = require("../../models/cardModel");
 const productModel = require("../../models/productModel");
 const handleError = require("../../utiles/handleError");
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const { markOrderPaid } = require("../../payments/paymentService");
 const mongoose = require("mongoose");
 const ObjectId = mongoose.Types.ObjectId;
 
 class orderController {
   constructor() {
     this.place_order = this.place_order.bind(this);
+    this.admin_order_status_update = this.admin_order_status_update.bind(this);
+    this.seller_order_status_update = this.seller_order_status_update.bind(this);
+    this.settleCodIfDelivered = this.settleCodIfDelivered.bind(this);
+  }
+
+  // Оплата при отриманні: після статусу «delivered» вважаємо замовлення оплаченим
+  // (ідемпотентно — повторний виклик нічого не нарахує вдруге).
+  async settleCodIfDelivered(orderId) {
+    try {
+      const order = await customerOrderModel.findById(orderId);
+      if (
+        order &&
+        order.payment_method === "cod" &&
+        order.delivery_status === "delivered" &&
+        order.payment_status !== "paid"
+      ) {
+        await markOrderPaid(order._id, { provider: "cod" });
+      }
+    } catch (error) {
+      console.error("💥 settleCodIfDelivered:", error.message);
+    }
   }
 
   async paymentCheck(id) {
     try {
       const order = await customerOrderModel.findById(id);
-      if (order.payment_status === "unpaid") {
+      // Замовлення з оплатою при отриманні оплачується при доставці — не скасовуємо за таймером.
+      if (order && order.payment_status === "unpaid" && order.payment_method !== "cod") {
         await customerOrderModel.findByIdAndUpdate(id, {
           delivery_status: "cancelled",
         });
@@ -393,6 +415,7 @@ class orderController {
       await customerOrderModel.findByIdAndUpdate(orderId, {
         delivery_status: status,
       });
+      await this.settleCodIfDelivered(orderId);
 
       return responseReturn(res, 200, {
         message: "Статус замовлення успішно змінено",
@@ -503,6 +526,16 @@ class orderController {
       await authorOrderModel.findByIdAndUpdate(orderId, {
         delivery_status: status,
       });
+      // COD: коли всі підзамовлення доставлено — гроші отримано, нараховуємо гаманці.
+      if (status === "delivered") {
+        const siblings = await authorOrderModel.find({ orderId: order.orderId });
+        if (siblings.every((s) => s.delivery_status === "delivered")) {
+          await customerOrderModel.findByIdAndUpdate(order.orderId, {
+            delivery_status: "delivered",
+          });
+          await this.settleCodIfDelivered(order.orderId);
+        }
+      }
 
       return responseReturn(res, 200, {
         message: "Статус замовлення успішно змінено",
@@ -520,74 +553,20 @@ class orderController {
     }
   }
 
-  async create_payment(req, res) {
-    // console.log("Received body:", req.body);
-
-    const { price } = req.body;
-    try {
-      const payment = await stripe.paymentIntents.create({
-        amount: price * 100,
-        currency: "eur",
-
-        automatic_payment_methods: {
-          enabled: true,
-        },
-      });
-
-      // console.log("PaymentIntent created:", payment);
-
-      responseReturn(res, 200, { clientSecret: payment.client_secret });
-    } catch (error) {
-      console.log("Stripe error:", error.message);
-      responseReturn(res, 500, { error: "Щось пішло не так" });
-    }
-  }
-
+  // Ручне підтвердження оплати адміном (наприклад, переказ на рахунок).
+  // Використовує ту саму ідемпотентну логіку, що й вебхуки платіжних систем.
   async order_confirm(req, res) {
     const { orderId } = req.params;
-    // console.log(orderId);
 
     try {
       const existingOrder = await customerOrderModel.findById(orderId);
       if (!existingOrder) {
         return responseReturn(res, 404, { error: "Замовлення не знайдено" });
       }
-      // Захист від подвійного нарахування, якщо адмін (чи повторний запит)
-      // викличе підтвердження оплати для вже підтвердженого замовлення.
-      if (existingOrder.payment_status === "paid") {
+      const result = await markOrderPaid(orderId, { provider: "manual" });
+      if (!result.changed) {
         return responseReturn(res, 400, {
           error: "Це замовлення вже підтверджено як оплачене",
-        });
-      }
-
-      await customerOrderModel.findByIdAndUpdate(orderId, {
-        payment_status: "paid",
-      });
-      await authorOrderModel.updateMany(
-        {
-          orderId: new ObjectId(orderId),
-        },
-        { payment_status: "paid", delivery_status: "pending" }
-      );
-      const custOrder = await customerOrderModel.findById(orderId);
-      const authOrder = await authorOrderModel.find({
-        orderId: new ObjectId(orderId),
-      });
-      const time = moment(Date.now()).format("l"); // m/d/year
-      const splitTime = time.split("/");
-
-      await myShopWallet.create({
-        amount: custOrder.price,
-        month: splitTime[0],
-        year: splitTime[2],
-      });
-
-      for (let i = 0; i < authOrder.length; i++) {
-        await sellerWallet.create({
-          sellerId: authOrder[i].sellerId.toString(),
-          amount: authOrder[i].price,
-          month: splitTime[0],
-          year: splitTime[2],
         });
       }
 

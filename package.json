@@ -7,7 +7,8 @@
   },
   "scripts": {
     "server": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",
@@ -34,8 +35,5 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
-  },
-  "allowScripts": {
-    "bcrypt@6.0.0": true
   }
 }

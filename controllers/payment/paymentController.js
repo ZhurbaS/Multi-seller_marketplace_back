@@ -11,7 +11,23 @@ const withdrawalRequest = require("../../models/withdrawalRequest");
 const mongoose = require("mongoose");
 const ObjectId = mongoose.Types.ObjectId;
 
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+// Stripe лишається лише для виплат продавцям (Connect). Клієнт створюємо ліниво,
+// щоб бек запускався і без STRIPE_SECRET_KEY (оплати покупців тепер через /api/pay/*).
+let _stripe = null;
+const stripe = new Proxy(
+  {},
+  {
+    get(_t, prop) {
+      if (!_stripe) {
+        if (!process.env.STRIPE_SECRET_KEY) {
+          throw new Error("STRIPE_SECRET_KEY не задано — виплати продавцям через Stripe недоступні");
+        }
+        _stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+      }
+      return _stripe[prop];
+    },
+  }
+);
 
 class paymentController {
   constructor() {

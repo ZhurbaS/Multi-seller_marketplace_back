@@ -46,27 +46,39 @@ if (
     "⚠️  Cloudinary не налаштовано (CLOUD_NAME/API_KEY/API_SECRET порожні або dummy): завантаження фото товарів не працюватиме. Див. SETUP.md."
   );
 }
+{
+  const pay = require("./payments/config");
+  const on = [
+    pay.monobankEnabled() && "monobank",
+    pay.liqpayEnabled() && "LiqPay",
+    pay.mockEnabled() && "mock (тест)",
+    pay.codEnabled() && "оплата при отриманні",
+  ].filter(Boolean);
+  console.log(`💳 Способи оплати: ${on.join(", ") || "жодного"}`);
+  if (
+    (pay.monobankEnabled() || pay.liqpayEnabled()) &&
+    /localhost/.test(pay.publicApiUrl())
+  ) {
+    console.warn(
+      "⚠️  PUBLIC_API_URL не задано/localhost: monobank і LiqPay не зможуть надіслати вебхук. Задайте публічну адресу бека (Codespaces: порт 5000). Див. SETUP.md."
+    );
+  }
+}
 if (process.env.NODE_ENV !== "production" && extraOrigins.length === 0) {
   console.warn(
     "ℹ️  ALLOWED_ORIGINS порожній: у Codespaces додайте адреси фронта й дашборду в .env, інакше браузер заблокує запити (CORS). Див. SETUP.md."
   );
 }
 
-app.use(bodyParser.json());
+// rawBody зберігаємо для перевірки підпису вебхуків (monobank підписує сире тіло запиту).
+app.use(
+  bodyParser.json({
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(cookieParser());
-
-app.options("/api/order/create-payment", (req, res) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
-    return res.sendStatus(204); // або 200
-  } else {
-    return res.sendStatus(403);
-  }
-});
 
 app.use(
   cors({
@@ -202,6 +214,7 @@ io.on("connection", (soc) => {
 app.use("/api/home", require("./routes/home/homeRoutes"));
 app.use("/api", require("./routes/authRoutes"));
 app.use("/api", require("./routes/order/orderRoutes"));
+app.use("/api", require("./routes/order/payRoutes"));
 app.use("/api", require("./routes/home/cardRoutes"));
 app.use("/api", require("./routes/dashboard/categoryRoutes"));
 app.use("/api", require("./routes/dashboard/productRoutes"));

@@ -85,7 +85,10 @@ Vite (front, dashboard) читає `.env` **лише при старті** — �
 | `DB_PRO_URL` | рядок підключення (лише production) |
 | `SECRET` | довгий випадковий рядок для JWT (`openssl rand -hex 32`) |
 | `JWT_COOKIE_EXPIRES_IN`, `SALT_ROUNDS` | `7`, `10` |
-| `STRIPE_SECRET_KEY` | тестовий ключ Stripe (поки `sk_test_dummy`) |
+| `PUBLIC_API_URL`, `PUBLIC_FRONT_URL` | публічні адреси бека й сайту (для вебхуків і повернення після оплати) |
+| `MONO_TOKEN` | токен plata by mono (тестовий або реальний) |
+| `LIQPAY_PUBLIC_KEY`, `LIQPAY_PRIVATE_KEY`, `LIQPAY_SANDBOX` | ключі LiqPay (потрібен ФОП/ТОВ) |
+| `PAYMENTS_MOCK`, `PAYMENTS_COD` | тестова оплата (не діє в production) / оплата при отриманні |
 | `CLOUD_NAME`, `API_KEY`, `API_SECRET` | **Cloudinary** — справжні значення, див. нижче |
 | `MAX_FILE_SIZE` | макс. розмір фото, МБ (`5`) |
 | `ORDER_PAYMENT_CHECK_IN` | скільки днів чекати оплату (`3`) |
@@ -106,6 +109,48 @@ Vite (front, dashboard) читає `.env` **лише при старті** — �
 
 ```
 node -e "require('dotenv').config({quiet:true});const c=require('cloudinary').v2;c.config({cloud_name:process.env.CLOUD_NAME,api_key:process.env.API_KEY,api_secret:process.env.API_SECRET});c.api.ping().then(r=>console.log('PING OK',r.status)).catch(e=>console.log('PING ERR',e.error))"
+```
+
+---
+
+## Платежі
+
+Способи оплати на сторінці «Оплата» з'являються **лише якщо налаштовані** (видно в логу бека при
+старті: `💳 Способи оплати: ...`). Ціна завжди береться з замовлення в БД, не від браузера.
+
+| Спосіб | Що потрібно | Без ФОП |
+|--------|-------------|---------|
+| Оплата при отриманні | нічого (`PAYMENTS_COD=true`) | працює |
+| Тестова оплата (mock) | нічого, лише не-production | працює |
+| plata by mono | `MONO_TOKEN` | тестовий токен — так, реальні гроші — ні |
+| LiqPay | `LIQPAY_PUBLIC_KEY` + `LIQPAY_PRIVATE_KEY` | ні (ключі видає лише бізнесу) |
+
+### monobank (тестовий режим)
+
+1. Відкрийте https://api.monobank.ua, увійдіть через застосунок monobank (QR) — отримаєте **тестовий токен**.
+2. У `back/.env`: `MONO_TOKEN=<токен>`, `PUBLIC_API_URL=<адреса бека>`, `PUBLIC_FRONT_URL=<адреса сайту>`. Перезапустіть бек.
+3. На сторінці оплати оберіть monobank → на платіжній сторінці вводьте **будь-яку картку, що проходить перевірку Луна**
+   (напр. `4242 4242 4242 4242`, будь-яка майбутня дата, будь-який CVV). Apple/Google Pay у тесті недоступні.
+4. Вебхук приходить на `PUBLIC_API_URL/api/pay/webhook/monobank` (порт 5000 у Codespaces має бути **Public**).
+   Якщо вебхук не дійшов — статус підтягнеться при поверненні на сайт.
+
+### LiqPay (коли з'явиться ФОП)
+
+1. Зареєструйте бізнес-акаунт на liqpay.ua, створіть магазин, у «Налаштування → API» візьміть Public/Private key.
+2. Впишіть у `back/.env` обидва ключі. Поки `NODE_ENV` не `production` — працює sandbox (гроші не списуються).
+3. Callback: `PUBLIC_API_URL/api/pay/webhook/liqpay` (підписаний, перевіряється бекендом).
+
+### Перехід на бойові платежі (чекліст після ФОП)
+
+- Укласти договір еквайрингу в monobank (web.monobank.ua) → взяти **бойовий** `MONO_TOKEN`; у LiqPay — бойові ключі.
+- Підключити ПРРО/чеки (бухгалтер підкаже; monobank і LiqPay підтримують фіскалізацію).
+- `NODE_ENV=production`, `PUBLIC_API_URL`/`PUBLIC_FRONT_URL` — реальні домени на HTTPS; mock і sandbox вимкнуться самі.
+- Пройти один реальний платіж на мінімальну суму й повернути його.
+
+### Тести платіжного коду
+
+```
+cd back && npm test      # 20 тестів: підписи monobank/LiqPay, ідемпотентність, суми, COD
 ```
 
 ---
