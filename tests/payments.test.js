@@ -190,6 +190,27 @@ stubModule("models/sellerWallet.js", {
   create: async (d) => db.sellerWallets.push(d),
 });
 
+// Склад тестується окремо (stock.test.js) — тут лише фіксуємо, що відновлення його викликає.
+const stockCalls = [];
+stubModule("utiles/stockService.js", {
+  reserveForOrder: async (id) => {
+    stockCalls.push(String(id));
+    return { ok: true };
+  },
+});
+
+// Купони тестуються окремо (coupon.test.js) — тут лише заглушки викликів.
+stubModule("utiles/couponService.js", {
+  markRedeemed: async () => {},
+  releaseForOrder: async () => true,
+  reacquireForOrder: async () => true,
+});
+
+// Налаштування (утримання виплат) — без MongoDB
+stubModule("controllers/settingsController.js", {
+  loadSettings: async () => ({ payoutHoldDays: 14 }),
+});
+
 const service = require("../payments/paymentService");
 
 function seedOrder(over = {}) {
@@ -236,6 +257,7 @@ test("markOrderPaid: скасоване за таймером замовленн
   const order = seedOrder({ delivery_status: "cancelled" });
   await service.markOrderPaid(order._id);
   assert.equal(order.delivery_status, "pending");
+  assert.deepEqual(stockCalls, [order._id]); // склад зарезервовано знову
 });
 
 test("LiqPay callback: невалідний підпис → 401, статус не змінюється", async () => {

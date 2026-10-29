@@ -55,6 +55,27 @@ const productSchema = new Schema(
       type: Number,
       default: 0,
     },
+    // --- Умови продажу ---
+    // Ціна й склад рахуються в штуках. Мінімальне замовлення і крок кратності
+    // дозволяють продавати комплекти/упаковки (мін. 100, крок 100 → лише по 100 шт).
+    minOrderQty: { type: Number, default: 1, min: 1 },
+    orderStep: { type: Number, default: 1, min: 1 },
+    // Необов'язковий підпис для покупця, напр. "Упаковка по 100 шт"
+    packLabel: { type: String, default: "", trim: true },
+    // Знижки за кількість: від minQty шт — знижка percent % (до ціни зі знижкою товару)
+    priceTiers: {
+      type: [
+        {
+          minQty: { type: Number, required: true, min: 2 },
+          percent: { type: Number, required: true, min: 1, max: 90 },
+        },
+      ],
+      default: [],
+    },
+    // Коли товару немає в наявності: очікуваний термін поставки (днів) і чи можна передзамовити
+    restockDaysMin: { type: Number, default: null },
+    restockDaysMax: { type: Number, default: null },
+    allowPreorder: { type: Boolean, default: false },
     // Вільні пари ключ-значення ("Екран" → "15.6″"), а не жорстка схема під
     // кожну категорію — різні товари (ноутбук, годинник, колонки) мають
     // абсолютно різний набір характеристик, і продавцю потрібна гнучкість.

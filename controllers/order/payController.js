@@ -30,8 +30,19 @@ const publicState = (order) => ({
 
 class payController {
   // Доступні способи оплати (показуємо лише те, що налаштовано в .env)
-  methods(req, res) {
-    responseReturn(res, 200, { methods: payments.availableMethods() });
+  async methods(req, res) {
+    try {
+      const list = payments.availableMethods();
+      // «За рахунком» — лише якщо адмін заповнив реквізити; фронт показує його тільки юрособам,
+      // а сервер усе одно перевіряє тип покупця при старті оплати.
+      if (await require("../../utiles/invoiceService").isAvailable()) {
+        list.push({ id: "invoice", title: "Безготівковий розрахунок за рахунком (для юросіб та ФОП)", businessOnly: true });
+      }
+      responseReturn(res, 200, { methods: list });
+    } catch (error) {
+      console.error("💥 payController.methods:", error.message);
+      responseReturn(res, 200, { methods: payments.availableMethods() });
+    }
   }
 
   // Старт оплати: сума береться з БД, а не з запиту.

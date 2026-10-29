@@ -83,16 +83,24 @@ async function createInvoice({ order, amountUah }) {
     merchantPaymInfo: {
       reference,
       destination: `Оплата замовлення №${reference.slice(-8).toUpperCase()}`,
-      basketOrder: (order.products || []).slice(0, 50).map((p) => {
-        const unit = p.price - Math.floor((p.price * (p.discount || 0)) / 100);
-        return {
-          name: String(p.name).slice(0, 250),
-          qty: p.quantity,
-          sum: Math.round(unit * 100),
-          code: String(p._id),
-          unit: "шт.",
-        };
-      }),
+      // Кошик передаємо лише якщо його сума збігається з сумою платежу (немає знижки за
+      // сумою замовлення) — інакше monobank/фіскальний чек побачать розбіжність.
+      ...(order.order_discount?.amount > 0 || order.coupon?.amount > 0
+        ? {}
+        : {
+            basketOrder: (order.products || []).slice(0, 50).map((p) => {
+              const unit =
+                p.unitPrice ??
+                p.price - Math.floor((p.price * (p.discount || 0)) / 100);
+              return {
+                name: String(p.name).slice(0, 250),
+                qty: p.quantity,
+                sum: Math.round(unit * 100),
+                code: String(p._id),
+                unit: "шт.",
+              };
+            }),
+          }),
     },
     redirectUrl: `${publicFrontUrl()}/order/confirm?orderId=${reference}`,
     webHookUrl: `${publicApiUrl()}/api/pay/webhook/monobank`,
@@ -110,6 +118,17 @@ async function getInvoiceStatus(invoiceId) {
   return monoFetch(
     `/api/merchant/invoice/status?invoiceId=${encodeURIComponent(invoiceId)}`
   );
+}
+
+// Повернення коштів (повне чи часткове). extRef — наш унікальний номер повернення:
+// за ним можна пізніше знайти операцію в cancelList статусу рахунку.
+// Якщо в monobank увімкнена фіскалізація (ПРРО), для чека повернення потрібні позиції —
+// у такому разі API поверне помилку 400, і повернення треба провести вручну в кабінеті банку.
+async function cancelInvoice({ invoiceId, amountUah, extRef }) {
+  return monoFetch("/api/merchant/invoice/cancel", {
+    method: "POST",
+    body: { invoiceId, extRef, amount: Math.round(amountUah * 100) },
+  });
 }
 
 // Статуси monobank: created | processing | hold | success | failure | reversed | expired
@@ -130,6 +149,7 @@ module.exports = {
   name: "monobank",
   createInvoice,
   getInvoiceStatus,
+  cancelInvoice,
   verifyWebhook,
   normalizeStatus,
   // для тестів

@@ -215,6 +215,9 @@ app.use("/api/home", require("./routes/home/homeRoutes"));
 app.use("/api", require("./routes/authRoutes"));
 app.use("/api", require("./routes/order/orderRoutes"));
 app.use("/api", require("./routes/order/payRoutes"));
+app.use("/api", require("./routes/settingsRoutes"));
+app.use("/api", require("./routes/returnRoutes"));
+app.use("/api", require("./routes/couponRoutes"));
 app.use("/api", require("./routes/home/cardRoutes"));
 app.use("/api", require("./routes/dashboard/categoryRoutes"));
 app.use("/api", require("./routes/dashboard/productRoutes"));
@@ -230,6 +233,7 @@ const port = process.env.PORT;
 (async () => {
   try {
     await dbConnect();
+    require("./utiles/orderExpiry").startOrderExpiry();
     server.listen(port, () =>
       console.log(`✅ Server is running on port ${port}`)
     );

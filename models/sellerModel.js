@@ -44,6 +44,14 @@ const sellerSchema = new Schema(
       type: Object,
       default: {},
     },
+    // Індивідуальна комісія магазину, %. null — діє ставка категорії/типова.
+    // 0 — власний магазин: комісія не нараховується.
+    commissionPercent: {
+      type: Number,
+      default: null,
+      min: 0,
+      max: 50,
+    },
   },
   { timestamps: true }
 );

@@ -6,6 +6,7 @@ const handleError = require("../../utiles/handleError");
 const stripeModel = require("../../models/stripeModel");
 const sellerModel = require("../../models/sellerModel");
 const sellerWallet = require("../../models/sellerWallet");
+const ledger = require("../../utiles/ledger");
 const withdrawalRequest = require("../../models/withdrawalRequest");
 
 const mongoose = require("mongoose");
@@ -148,16 +149,19 @@ class paymentController {
       const withdrawalAmount = this.sumAmount(successWithdrawals);
       const totalAmount = this.sumAmount(payments);
 
-      let availableAmount = 0;
-      if (totalAmount > 0) {
-        availableAmount = totalAmount - (pendingAmount + withdrawalAmount);
-      }
+      // Доступно до виведення = вільні кошти журналу − запити й виплати; hold — ще на утриманні.
+      const balances = await ledger.sellerBalances(sellerId);
+      const availableAmount = Math.max(
+        0,
+        balances.available - (pendingAmount + withdrawalAmount)
+      );
 
       return responseReturn(res, 200, {
         totalAmount,
         pendingAmount,
         withdrawalAmount,
         availableAmount,
+        holdAmount: balances.hold,
         successWithdrawals,
         pendingWithdrawals,
       });
@@ -184,7 +188,6 @@ class paymentController {
     try {
       // Не даємо запитати виплату більшу за реально доступний баланс —
       // раніше цю суму ніхто не звіряв ні тут, ні при підтвердженні.
-      const payments = await sellerWallet.find({ sellerId });
       const pendingWithdrawals = await withdrawalRequest.find({
         sellerId,
         status: "pending",
@@ -194,12 +197,12 @@ class paymentController {
         status: "success",
       });
 
-      const totalAmount = this.sumAmount(payments);
       const pendingAmount = this.sumAmount(pendingWithdrawals);
       const withdrawalAmount = this.sumAmount(successWithdrawals);
+      const balances = await ledger.sellerBalances(sellerId);
       const availableAmount = Math.max(
         0,
-        totalAmount - (pendingAmount + withdrawalAmount)
+        balances.available - (pendingAmount + withdrawalAmount)
       );
 
       if (requestedAmount > availableAmount) {

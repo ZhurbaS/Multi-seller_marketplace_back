@@ -5,16 +5,18 @@
 //  - джерело істини — підписаний вебхук (+ перевірка статусу через API провайдера);
 //  - markOrderPaid ідемпотентний: повторний вебхук/клік не нарахує гроші вдруге.
 
-const moment = require("moment");
 const customerOrderModel = require("../models/customerOrderModel");
 const authorOrderModel = require("../models/authorOrderModel");
-const myShopWallet = require("../models/myShopWallet");
-const sellerWallet = require("../models/sellerWallet");
+const ledger = require("../utiles/ledger");
+const stockService = require("../utiles/stockService");
+const couponService = require("../utiles/couponService");
 const config = require("./config");
 const monobank = require("./providers/monobank");
 const liqpay = require("./providers/liqpay");
 
 const METHODS = ["monobank", "liqpay", "mock", "cod"];
+// Оплата за рахунком (invoice) — лише для юросіб, див. utiles/invoiceService.js; доступність залежить від
+// реквізитів магазину в БД, тому перевіряється окремо (асинхронно).
 
 function availableMethods() {
   const list = [];
@@ -53,6 +55,9 @@ async function markOrderPaid(orderId, { provider, providerStatus, modifiedDate }
     { new: true }
   );
   if (!order) return { changed: false };
+  if (order.invoice?.number && order.payment_method === "invoice") {
+    await customerOrderModel.updateOne({ _id: order._id }, { $set: { "invoice.status": "paid" } });
+  }
 
   // Якщо замовлення встигли автоскасувати за таймером, а гроші прийшли — відновлюємо.
   const restore = order.delivery_status === "cancelled";
@@ -60,6 +65,16 @@ async function markOrderPaid(orderId, { provider, providerStatus, modifiedDate }
     await customerOrderModel.findByIdAndUpdate(order._id, {
       delivery_status: "pending",
     });
+    // Товари при скасуванні повернулись на склад — резервуємо знову. Гроші вже отримано,
+    // тому навіть якщо товару не вистачає, замовлення лишається оплаченим (розбереться адмін).
+    const r = await stockService.reserveForOrder(order._id);
+    if (!r.ok) {
+      console.error(
+        `⚠️ Оплачене замовлення ${order._id} відновлено, але на складі бракує "${r.name}" — потрібне ручне втручання/повернення коштів`
+      );
+    }
+    // Купон, який «відпустили» під час автоскасування, знову займаємо
+    await couponService.reacquireForOrder(order._id);
   }
   // delivery_status підзамовлень чіпаємо лише при відновленні скасованого,
   // щоб не відкотити вже просунутий статус (напр. COD, оплачений при доставці).
@@ -69,17 +84,10 @@ async function markOrderPaid(orderId, { provider, providerStatus, modifiedDate }
   );
 
   const authOrders = await authorOrderModel.find({ orderId: order._id });
-  const [month, , year] = moment().format("l").split("/");
-
-  await myShopWallet.create({ amount: order.price, month, year });
-  for (const ao of authOrders) {
-    await sellerWallet.create({
-      sellerId: ao.sellerId.toString(),
-      amount: ao.price,
-      month,
-      year,
-    });
-  }
+  // Нарахування: частка продавця (з утриманням до закінчення терміну повернення),
+  // комісія магазину, знижка за сумою замовлення — див. utiles/ledger.js
+  await ledger.recordPaidOrder(order, authOrders);
+  await couponService.markRedeemed(order._id);
   return { changed: true, order };
 }
 
@@ -94,7 +102,7 @@ class PaymentError extends Error {
 }
 
 async function startPayment(order, method) {
-  if (!METHODS.includes(method) || !isMethodAvailable(method)) {
+  if (method !== "invoice" && (!METHODS.includes(method) || !isMethodAvailable(method))) {
     throw new PaymentError("Цей спосіб оплати недоступний");
   }
   if (order.payment_status === "paid") {
@@ -103,9 +111,37 @@ async function startPayment(order, method) {
   if (order.delivery_status === "cancelled") {
     throw new PaymentError("Замовлення скасовано");
   }
+  if (method === "invoice" && order.buyer?.kind !== "company") {
+    throw new PaymentError("Оплата за рахунком доступна лише юридичним особам та ФОП");
+  }
+  // Покупець передумав і обрав інший спосіб — раніше виставлений рахунок більше не діє
+  // (скасовуємо рахунок лише після того, як новий спосіб успішно стартував).
+  const dropInvoice = async () => {
+    if (method !== "invoice" && order.invoice?.number) {
+      await require("../utiles/invoiceService").cancelIfInvoice(order._id);
+    }
+  };
   const amountUah = Number(order.price);
   if (!Number.isFinite(amountUah) || amountUah <= 0) {
     throw new PaymentError("Некоректна сума замовлення", 500);
+  }
+
+  if (method === "invoice") {
+    const invoiceService = require("../utiles/invoiceService");
+    try {
+      const r = await invoiceService.issueAndSend(order);
+      return {
+        type: "invoice",
+        number: r.order?.invoice?.number || null,
+        status: r.order?.invoice?.status || null,
+        dueAt: r.order?.invoice?.dueAt || null,
+        emailed: !!r.sent,
+        to: r.to || null,
+      };
+    } catch (e) {
+      if (e instanceof invoiceService.InvoiceError) throw new PaymentError(e.message, e.status);
+      throw e;
+    }
   }
 
   if (method === "cod") {
@@ -114,6 +150,7 @@ async function startPayment(order, method) {
       "payment.provider": "cod",
       "payment.status": "pending",
     });
+    await dropInvoice();
     return { type: "cod" };
   }
 
@@ -127,6 +164,7 @@ async function startPayment(order, method) {
       "payment.providerStatus": "created",
       "payment.modifiedDate": null,
     });
+    await dropInvoice();
     return { type: "redirect", url: pageUrl };
   }
 
@@ -139,6 +177,7 @@ async function startPayment(order, method) {
       "payment.status": "pending",
       "payment.providerStatus": null,
     });
+    await dropInvoice();
     return { type: "form", url: form.url, fields: form.fields };
   }
 
@@ -148,6 +187,7 @@ async function startPayment(order, method) {
     "payment.provider": "mock",
     "payment.status": "pending",
   });
+  await dropInvoice();
   return {
     type: "redirect",
     url: `${config.publicFrontUrl()}/pay/mock?orderId=${order._id}`,
@@ -306,7 +346,93 @@ async function completeMockPayment(order, success) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Повернення коштів покупцю
+// ---------------------------------------------------------------------------
+// Повертає { state: "success" | "processing" | "failed" | "manual", provider, error? }.
+//  - "manual": автоматичне повернення неможливе (оплата при отриманні) — адмін переказує вручну;
+//  - "processing": банк прийняв запит, результат буде пізніше (перевіряється через syncRefund);
+//  - "failed": банк відхилив запит (текст помилки — в error), можна повторити або провести вручну.
+// extRef — стабільний номер повернення: повторний виклик не створює друге повернення
+// (для monobank спершу перевіряємо, чи цей extRef уже є в cancelList).
+const MONO_REFUND_STATE = { success: "success", processing: "processing", failure: "failed" };
+
+// Операції повернення за одним rr-номером (спроби мають суфікс -2, -3…): якщо будь-яка з них
+// успішна або ще в обробці, нову не створюємо — щоб не повернути кошти двічі.
+function monoRefundsFor(status, extRef) {
+  const base = String(extRef).replace(/-\d+$/, "");
+  return (status.cancelList || []).filter((c) => c.extRef === base || String(c.extRef).startsWith(`${base}-`));
+}
+function monoRefundState(list) {
+  if (list.some((c) => c.status === "success")) return "success";
+  if (list.some((c) => c.status === "processing")) return "processing";
+  return list.length ? "failed" : null;
+}
+
+async function refundPayment(order, amountUah, extRef) {
+  const provider = order.payment?.provider;
+  try {
+    if (provider === "mock") {
+      return { state: "success", provider };
+    }
+    if (provider === "monobank" && order.payment?.invoiceId) {
+      const status = await monobank.getInvoiceStatus(order.payment.invoiceId);
+      const prior = monoRefundState(monoRefundsFor(status, extRef));
+      if (prior === "success" || prior === "processing") return { state: prior, provider };
+      const r = await monobank.cancelInvoice({
+        invoiceId: order.payment.invoiceId,
+        amountUah,
+        extRef,
+      });
+      return { state: MONO_REFUND_STATE[r?.status] || "processing", provider };
+    }
+    if (provider === "liqpay" && config.liqpayEnabled()) {
+      const r = await liqpay.refund({ orderId: order._id.toString(), amountUah });
+      if (r?.result === "ok" && r.status === "reversed") {
+        const waiting = r.wait_amount === true || r.wait_amount === "true";
+        return { state: waiting ? "processing" : "success", provider };
+      }
+      return {
+        state: "failed",
+        provider,
+        error: `LiqPay: ${r?.err_description || r?.err_code || r?.status || "відмова"}`,
+      };
+    }
+  } catch (error) {
+    // LiqPay: після збою мережі невідомо, чи пройшло повернення, і перевірити за власним номером
+    // неможливо — повторювати наосліп не можна. Лишаємо «в обробці»: адмін звіряє з кабінетом
+    // LiqPay і підтверджує вручну (кнопка стає доступною через 2 хв).
+    if (provider === "liqpay") {
+      return {
+        state: "processing",
+        provider,
+        error: `Невідомий результат (${error.message}). Перевірте повернення в кабінеті LiqPay і підтвердіть вручну`,
+      };
+    }
+    return { state: "failed", provider, error: error.message };
+  }
+  return { state: "manual", provider: provider || null };
+}
+
+// Уточнення статусу повернення, яке банк обробляє асинхронно.
+async function syncRefund(order, extRef) {
+  const provider = order.payment?.provider;
+  try {
+    if (provider === "monobank" && order.payment?.invoiceId) {
+      const status = await monobank.getInvoiceStatus(order.payment.invoiceId);
+      const state = monoRefundState(monoRefundsFor(status, extRef));
+      if (!state) return { state: "failed", provider, error: "Операцію повернення в monobank не знайдено" };
+      return { state, provider };
+    }
+  } catch (error) {
+    return { state: "processing", provider, error: error.message };
+  }
+  return { state: "processing", provider };
+}
+
 module.exports = {
+  refundPayment,
+  syncRefund,
   PaymentError,
   availableMethods,
   isMethodAvailable,

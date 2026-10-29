@@ -9,6 +9,8 @@ const wishlistModel = require("../../models/wishlistModel");
 const reviewModel = require("../../models/reviewModel");
 const bannerModel = require("../../models/bannerModel");
 const mongoose = require("mongoose");
+const pricing = require("../../utiles/pricing");
+const { notifyBackInStock } = require("../../utiles/notifyBackInStock");
 cloudinary.config({
   cloud_name: process.env.CLOUD_NAME,
   api_key: process.env.API_KEY,
@@ -115,6 +117,27 @@ class productController {
         const price = parseInt(getFieldValue(fields.price)) || 0;
         const shopName = getFieldValue(fields.shopName).trim();
 
+        if (stock < 0 || price < 0 || discount < 0 || discount > 100) {
+          return responseReturn(res, 400, {
+            error: "Кількість, ціна й знижка мають бути невід'ємними, знижка — до 100%",
+          });
+        }
+
+        // Умови продажу: мін. замовлення, крок, знижки за кількість, терміни поставки.
+        // У multipart-формі всі значення — рядки (priceTiers — JSON-рядок).
+        const saleRules = pricing.sanitizeSaleRules({
+          minOrderQty: getFieldValue(fields.minOrderQty),
+          orderStep: getFieldValue(fields.orderStep),
+          packLabel: getFieldValue(fields.packLabel),
+          priceTiers: getFieldValue(fields.priceTiers),
+          restockDaysMin: getFieldValue(fields.restockDaysMin),
+          restockDaysMax: getFieldValue(fields.restockDaysMax),
+          allowPreorder: getFieldValue(fields.allowPreorder),
+        });
+        if (saleRules.error) {
+          return responseReturn(res, 400, { error: saleRules.error });
+        }
+
         // Характеристики — необов'язкове поле, приходить як JSON-рядок
         // (FormData не вміє передавати масиви об'єктів напряму). Порожні
         // рядки (продавець додав рядок, але нічого не вписав) відфільтровуємо.
@@ -175,6 +198,7 @@ class productController {
           description,
           images: allImageUrl,
           specifications,
+          ...saleRules.value,
         });
 
         return responseReturn(res, 201, {
@@ -262,6 +286,13 @@ class productController {
         specifications,
       } = req.body;
 
+      // Умови продажу (JSON-запит). Форма редагування завжди надсилає всі поля;
+      // відсутні поля трактуються як значення за замовчуванням (мін. 1, крок 1).
+      const saleRules = pricing.sanitizeSaleRules(req.body);
+      if (saleRules.error) {
+        return responseReturn(res, 400, { error: saleRules.error });
+      }
+
       if (!productId) {
         return responseReturn(res, 400, { error: "Потрібен ідентифікатор товару" });
       }
@@ -292,16 +323,30 @@ class productController {
 
       const slug = `${slugBase}-${nanoid(6)}`;
 
+      const stockNum = Number(stock);
+      const priceNum = Number(price);
+      const discountNum = Number(discount);
+      if (
+        !Number.isInteger(stockNum) || stockNum < 0 ||
+        !Number.isFinite(priceNum) || priceNum < 0 ||
+        !Number.isFinite(discountNum) || discountNum < 0 || discountNum > 100
+      ) {
+        return responseReturn(res, 400, {
+          error: "Кількість, ціна й знижка мають бути невід'ємними, знижка — до 100%",
+        });
+      }
+
       // Підготовка об'єкту для оновлення
       const updateData = {
         name,
         description,
-        stock,
-        discount,
+        stock: stockNum,
+        discount: discountNum,
         brand,
-        price,
+        price: priceNum,
         slug,
         slugBase,
+        ...saleRules.value,
       };
 
       if (category) {
@@ -324,6 +369,13 @@ class productController {
 
       if (!product) {
         return responseReturn(res, 404, { error: "Товар не знайдено" });
+      }
+
+      // Товар знову в наявності — повідомляємо підписників (не блокуємо відповідь).
+      if (existingProduct.stock <= 0 && product.stock > 0) {
+        notifyBackInStock(product._id).catch((e) =>
+          console.error("💥 notifyBackInStock:", e.message)
+        );
       }
 
       responseReturn(res, 200, {

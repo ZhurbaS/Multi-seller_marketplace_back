@@ -28,6 +28,24 @@ router.get(
   customerAuthMiddleware,
   orderController.get_orders_details
 );
+// Рахунок юрособи (PDF)
+router.get(
+  "/home/customer/orders/:orderId/invoice.pdf",
+  customerAuthMiddleware,
+  orderController.invoice_pdf
+);
+router.get(
+  "/admin/orders/:orderId/invoice.pdf",
+  authMiddleware,
+  requireRole("admin"),
+  orderController.invoice_pdf
+);
+router.post(
+  "/admin/orders/:orderId/invoice/resend",
+  authMiddleware,
+  requireRole("admin"),
+  orderController.invoice_resend
+);
 // Оплата тепер у /api/pay/* (див. payRoutes.js). Старий небезпечний
 // /order/create-payment (Stripe, сума від клієнта) видалено.
 // Ручне підтвердження оплати — лише адмін (напр., переказ на рахунок).

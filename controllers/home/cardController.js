@@ -1,286 +1,178 @@
 const { responseReturn } = require("../../utiles/response");
 const cardModel = require("../../models/cardModel");
-// const {
-//   mongo: { ObjectId },
-// } = require("mongoose");
-
 const mongoose = require("mongoose");
 const wishlistModel = require("../../models/wishlistModel");
-const ObjectId = mongoose.Types.ObjectId;
+const productModel = require("../../models/productModel");
+const pricing = require("../../utiles/pricing");
+const { buildCart, CART_TTL_DAYS } = require("../../utiles/cartService");
 
 class cardController {
   add_to_card = async (req, res) => {
-    // console.log(req.body);
-    const { userId, productId, quantity } = req.body;
+    // userId беремо з токена (customerAuthMiddleware), а не з тіла запиту.
+    const userId = req.id;
+    const { productId } = req.body;
+    const requested = Number(req.body.quantity);
     try {
-      const product = await cardModel.findOne({
-        $and: [
-          {
-            productId: {
-              $eq: productId,
-            },
-          },
-          {
-            userId: {
-              $eq: userId,
-            },
-          },
-        ],
-      });
-      if (product) {
-        responseReturn(res, 404, { error: "Товар уже в кошику" });
-      } else {
-        const product = await cardModel.create({
-          userId,
-          productId,
-          quantity,
-        });
-
-        responseReturn(res, 201, {
-          message: "Товар додано до кошика",
-          product,
-        });
+      if (!mongoose.Types.ObjectId.isValid(productId)) {
+        return responseReturn(res, 400, { error: "Некоректний товар" });
       }
+      const dbProduct = await productModel.findById(productId);
+      if (!dbProduct) {
+        return responseReturn(res, 404, { error: "Товар не знайдено" });
+      }
+      // Якщо кількість не вказано — беремо мінімальне замовлення товару.
+      const quantity = Number.isFinite(requested) && req.body.quantity !== undefined
+        ? requested
+        : dbProduct.minOrderQty || 1;
+      const avail = pricing.availability(dbProduct, quantity);
+      if (!avail.ok) {
+        return responseReturn(res, 400, { error: avail.error });
+      }
+
+      const existing = await cardModel.findOne({ productId, userId });
+      if (existing) {
+        return responseReturn(res, 404, { error: "Товар уже в кошику" });
+      }
+      const product = await cardModel.create({ userId, productId, quantity });
+      responseReturn(res, 201, {
+        message: avail.preorder
+          ? "Передзамовлення додано до кошика"
+          : "Товар додано до кошика",
+        product,
+      });
     } catch (error) {
       console.error("💥 Error in cardController: add_to_card:", error);
-      return responseReturn(res, 500, {
-        error: "Щось пішло не так",
-      });
+      return responseReturn(res, 500, { error: "Щось пішло не так" });
     }
   };
 
   async get_card_products(req, res) {
-    const commission = 5;
-    // console.log("hello");
     const { userId } = req.params;
-    // console.log(userId);
+    // Раніше будь-хто міг прочитати чужий кошик, підставивши userId.
+    if (req.id !== userId) {
+      return responseReturn(res, 403, { error: "Доступ заборонено" });
+    }
 
     try {
-      const card_products = await cardModel.aggregate([
-        {
-          $match: {
-            userId: {
-              $eq: new ObjectId(userId),
-            },
-          },
-        },
-        {
-          $lookup: {
-            from: "products",
-            localField: "productId",
-            foreignField: "_id",
-            as: "products",
-          },
-        },
-      ]);
-
-      let buy_product_item = 0;
-      let calculatePrice = 0;
-      let card_product_count = 0;
-
-      const outOfStockProduct = card_products.filter(
-        (p) => p.products[0].stock < p.quantity
-      );
-      for (let i = 0; i < outOfStockProduct.length; i++) {
-        card_product_count = card_product_count + outOfStockProduct[i].quantity;
-      }
-
-      const stockProduct = card_products.filter(
-        (p) => p.products[0].stock >= p.quantity
-      );
-      for (let i = 0; i < stockProduct.length; i++) {
-        const { quantity } = stockProduct[i];
-        card_product_count = buy_product_item + quantity;
-        buy_product_item = buy_product_item + quantity;
-        const { price, discount } = stockProduct[i].products[0];
-        if (discount !== 0) {
-          calculatePrice =
-            calculatePrice +
-            quantity * (price - Math.floor((price * discount) / 100));
-        } else {
-          calculatePrice = calculatePrice + quantity * price;
-        }
-      }
-
-      let p = [];
-      let uniqueSellerId = [
-        ...new Set(stockProduct.map((p) => p.products[0].sellerId.toString())),
-      ];
-      for (let i = 0; i < uniqueSellerId.length; i++) {
-        let price = 0;
-        for (let j = 0; j < stockProduct.length; j++) {
-          const tempProduct = stockProduct[j].products[0];
-          if (uniqueSellerId[i] === tempProduct.sellerId.toString()) {
-            let pri = 0;
-            if (tempProduct.discount !== 0) {
-              pri =
-                tempProduct.price -
-                Math.floor((tempProduct.price * tempProduct.discount) / 100);
-            } else {
-              pri = tempProduct.price;
-            }
-            pri = pri - Math.floor((pri * commission) / 100);
-            price = price + pri * stockProduct[j].quantity;
-            p[i] = {
-              sellerId: uniqueSellerId[i],
-              shopName: tempProduct.shopName,
-              price,
-              products: p[i]
-                ? [
-                    ...p[i].products,
-                    {
-                      _id: stockProduct[j]._id,
-                      quantity: stockProduct[j].quantity,
-                      productInfo: tempProduct,
-                    },
-                  ]
-                : [
-                    {
-                      _id: stockProduct[j]._id,
-                      quantity: stockProduct[j].quantity,
-                      productInfo: tempProduct,
-                    },
-                  ],
-            };
-          }
-        }
-      }
-      responseReturn(res, 200, {
-        card_products: p,
-        price: calculatePrice,
-        card_product_count,
-        shipping_fee: 20 * p.length,
-        buy_product_item,
-        outOfStockProduct,
-      });
-      // console.log(p);
+      // Збір кошика (ціни, знижки, купон) — у utiles/cartService.js
+      const couponCode =
+        typeof req.query.coupon === "string" ? req.query.coupon.slice(0, 64) : "";
+      const cart = await buildCart(userId, { couponCode });
+      responseReturn(res, 200, cart);
     } catch (error) {
       console.error("💥 Error in cardController: get_card_products:", error);
-      return responseReturn(res, 500, {
-        error: "Щось пішло не так",
-      });
+      return responseReturn(res, 500, { error: "Щось пішло не так" });
     }
   }
 
   async delete_card_product(req, res) {
     const { card_id } = req.params;
-    // console.log(card_id);
+    if (!mongoose.Types.ObjectId.isValid(card_id)) {
+      return responseReturn(res, 400, { error: "Некоректний ідентифікатор кошика" });
+    }
     try {
-      await cardModel.findByIdAndDelete(card_id);
-      responseReturn(res, 200, {
-        message: "Товар видалено з кошика",
-      });
+      // Видаляємо лише власну позицію кошика.
+      await cardModel.deleteOne({ _id: card_id, userId: req.id });
+      responseReturn(res, 200, { message: "Товар видалено з кошика" });
     } catch (error) {
       console.error("💥 Error in cardController: delete_card_product:", error);
-      return responseReturn(res, 500, {
-        error: "Щось пішло не так",
-      });
+      return responseReturn(res, 500, { error: "Щось пішло не так" });
     }
   }
 
-  async quantity_inc(req, res) {
+  // Змінює кількість на один крок товару (orderStep). direction: +1 / -1.
+  async changeQuantity(req, res, direction) {
     const { card_id } = req.params;
-    // console.log(card_id);
     if (!mongoose.Types.ObjectId.isValid(card_id)) {
       return responseReturn(res, 400, { error: "Некоректний ідентифікатор кошика" });
     }
-
     try {
-      const product = await cardModel.findById(card_id);
-      if (!product) {
+      const item = await cardModel.findById(card_id);
+      if (!item) {
         return responseReturn(res, 404, { error: "Товар не знайдено в кошику" });
       }
-      const { quantity } = product;
-      await cardModel.findByIdAndUpdate(card_id, { quantity: quantity + 1 });
-      responseReturn(res, 200, {
-        message: "Кількість оновлено",
-      });
+      if (item.userId.toString() !== req.id) {
+        return responseReturn(res, 403, { error: "Доступ заборонено" });
+      }
+      const product = await productModel.findById(item.productId);
+      if (!product) {
+        return responseReturn(res, 404, { error: "Товар більше не продається" });
+      }
+      const step = Math.max(1, product.orderStep || 1);
+      const newQty = item.quantity + direction * step;
+      const avail = pricing.availability(product, newQty);
+      if (!avail.ok) {
+        return responseReturn(res, 400, { error: avail.error });
+      }
+      await cardModel.findByIdAndUpdate(card_id, { quantity: newQty });
+      responseReturn(res, 200, { message: "Кількість оновлено" });
     } catch (error) {
-      console.error("💥 Error in cardController: quantity_inc:", error);
-      return responseReturn(res, 500, {
-        error: "Щось пішло не так",
-      });
+      console.error("💥 Error in cardController: changeQuantity:", error);
+      return responseReturn(res, 500, { error: "Щось пішло не так" });
     }
   }
 
-  async quantity_dec(req, res) {
-    const { card_id } = req.params;
-    // console.log(card_id);
-    if (!mongoose.Types.ObjectId.isValid(card_id)) {
-      return responseReturn(res, 400, { error: "Некоректний ідентифікатор кошика" });
-    }
-
-    try {
-      const product = await cardModel.findById(card_id);
-      if (!product) {
-        return responseReturn(res, 404, { error: "Товар не знайдено в кошику" });
-      }
-      const { quantity } = product;
-      await cardModel.findByIdAndUpdate(card_id, { quantity: quantity - 1 });
-      responseReturn(res, 200, {
-        message: "Кількість оновлено",
-      });
-    } catch (error) {
-      console.error("💥 Error in cardController: quantity_dec:", error);
-      return responseReturn(res, 500, {
-        error: "Щось пішло не так",
-      });
-    }
-  }
+  quantity_inc = (req, res) => this.changeQuantity(req, res, +1);
+  quantity_dec = (req, res) => this.changeQuantity(req, res, -1);
 
   async add_wishlist(req, res) {
-    // console.log(req.body);
-    const { slug, slugBase } = req.body;
+    const { productId, name, price, slug, slugBase, discount, image, rating } =
+      req.body;
     try {
-      const product = await wishlistModel.findOne({ slugBase });
+      // Раніше перевірка була лише за slugBase (без userId) — товар одного покупця
+      // блокував його додавання іншим, а в БД потрапляв довільний req.body.
+      const product = await wishlistModel.findOne({ userId: req.id, slugBase });
       if (product) {
-        responseReturn(res, 404, {
-          error: "Товар уже в списку бажань",
-        });
+        responseReturn(res, 404, { error: "Товар уже в списку бажань" });
       } else {
-        await wishlistModel.create(req.body);
-        responseReturn(res, 201, {
-          message: "Товар додано до списку бажань",
+        await wishlistModel.create({
+          userId: req.id,
+          productId,
+          name,
+          price,
+          slug,
+          slugBase,
+          discount,
+          image,
+          rating,
         });
+        responseReturn(res, 201, { message: "Товар додано до списку бажань" });
       }
     } catch (error) {
       console.error("💥 Error in cardController: add_wishlist:", error);
-      return responseReturn(res, 500, {
-        error: "Щось пішло не так",
-      });
+      return responseReturn(res, 500, { error: "Щось пішло не так" });
     }
   }
 
   async get_wishlist(req, res) {
-    // console.log(req.params);
     const { userId } = req.params;
-
+    if (req.id !== userId) {
+      return responseReturn(res, 403, { error: "Доступ заборонено" });
+    }
     try {
-      const wishlistProducts = await wishlistModel.find({
-        userId: userId,
-      });
+      const wishlistProducts = await wishlistModel.find({ userId });
       responseReturn(res, 200, {
         wishlistCount: wishlistProducts.length,
         wishlistProducts,
       });
     } catch (error) {
       console.error("💥 Error in cardController: get_wishlist:", error);
-      return responseReturn(res, 500, {
-        error: "Щось пішло не так",
-      });
+      return responseReturn(res, 500, { error: "Щось пішло не так" });
     }
   }
 
   async remove_wishlist(req, res) {
-    // console.log(req.params);
-
     const { wishlistId } = req.params;
     if (!mongoose.Types.ObjectId.isValid(wishlistId)) {
-      return responseReturn(res, 404, { error: "Некоректний ідентифікатор елемента списку бажань" });
+      return responseReturn(res, 404, {
+        error: "Некоректний ідентифікатор елемента списку бажань",
+      });
     }
-
     try {
-      const wishlist = await wishlistModel.findByIdAndDelete(wishlistId);
+      const wishlist = await wishlistModel.findOneAndDelete({
+        _id: wishlistId,
+        userId: req.id,
+      });
       if (!wishlist) {
         return responseReturn(res, 404, { error: "Елемент списку бажань не знайдено" });
       }
@@ -290,11 +182,10 @@ class cardController {
       });
     } catch (error) {
       console.error("💥 Error in cardController: remove_wishlist:", error);
-      return responseReturn(res, 500, {
-        error: "Щось пішло не так",
-      });
+      return responseReturn(res, 500, { error: "Щось пішло не так" });
     }
   }
 }
 
 module.exports = new cardController();
+module.exports.CART_TTL_DAYS = CART_TTL_DAYS;

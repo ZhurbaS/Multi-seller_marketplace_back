@@ -34,6 +34,17 @@ const authorOrderSchema = new Schema(
       type: String,
       required: true,
     },
+    deliveredAt: { type: Date, default: null },
+    // Знімок комісії на момент замовлення (зміна ставки пізніше історію не чіпає).
+    // Старі замовлення цих полів не мають.
+    commission: { type: Number },
+    payout: { type: Number }, // price − commission: що належить продавцю
+    // true — товари цього підзамовлення зараз «зарезервовані» (віднято зі складу).
+    // Гарантує, що повернення на склад відбувається рівно один раз.
+    stock_reserved: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

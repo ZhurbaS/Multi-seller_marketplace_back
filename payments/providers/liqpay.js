@@ -85,6 +85,31 @@ async function getStatus(orderId) {
   return res.json();
 }
 
+// Повернення на картку покупця (повне чи часткове). LiqPay відповідає { result, status, wait_amount }:
+// status "reversed" — повернення виконано; wait_amount=true — повернення відбудеться за рахунок
+// майбутніх платежів магазину (тоді вважаємо його «в обробці»).
+async function refund({ orderId, amountUah }) {
+  const params = {
+    public_key: process.env.LIQPAY_PUBLIC_KEY,
+    version: 3,
+    action: "refund",
+    order_id: orderId,
+    amount: Number(Number(amountUah).toFixed(2)),
+  };
+  const data = Buffer.from(JSON.stringify(params)).toString("base64");
+  const body = new URLSearchParams({
+    data,
+    signature: sign(data, process.env.LIQPAY_PRIVATE_KEY),
+  });
+  const res = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!res.ok) throw new Error(`LiqPay API ${res.status}`);
+  return res.json();
+}
+
 // success/sandbox → оплачено; failure/error/reversed → невдача; решта — очікування
 // (wait_accept, wait_secure, processing, 3ds_verify тощо).
 function normalizeStatus(status) {
@@ -108,5 +133,6 @@ module.exports = {
   decodeData,
   createCheckout,
   getStatus,
+  refund,
   normalizeStatus,
 };
