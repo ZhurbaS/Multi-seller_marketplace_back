@@ -38,6 +38,8 @@ const customerOrderSchema = new Schema(
       amount: { type: Number, default: 0 },
     },
     has_preorder: { type: Boolean, default: false },
+    // Коментар покупця до замовлення (до 1000 символів)
+    comment: { type: String, default: "", maxlength: 1000 },
     // Купон (знижка фінансується магазином). Діє замість знижки за сумою, не разом із нею:
     // тоді order_discount = {0, 0}. price = goods_total − order_discount.amount − coupon.amount.
     coupon: {

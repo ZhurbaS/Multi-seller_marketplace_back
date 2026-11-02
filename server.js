@@ -219,6 +219,7 @@ app.use("/api", require("./routes/settingsRoutes"));
 app.use("/api", require("./routes/returnRoutes"));
 app.use("/api", require("./routes/couponRoutes"));
 app.use("/api", require("./routes/home/cardRoutes"));
+app.use("/api", require("./routes/home/checkoutRoutes"));
 app.use("/api", require("./routes/dashboard/categoryRoutes"));
 app.use("/api", require("./routes/dashboard/productRoutes"));
 app.use("/api", require("./routes/dashboard/sellerRoutes"));

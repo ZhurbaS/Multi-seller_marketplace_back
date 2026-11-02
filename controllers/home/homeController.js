@@ -29,6 +29,19 @@ class homeController {
     return productsArray;
   };
 
+  // «Рекомендовано для вас» у кошику: ?ids=id1,id2 — товари з кошика
+  get_recommendations = async (req, res) => {
+    try {
+      const ids = String(req.query.ids || "").split(",").filter(Boolean);
+      const items = await require("../../utiles/recommendations").recommendForCart(ids);
+      return responseReturn(res, 200, { products: items });
+    } catch (error) {
+      console.error("💥 Error in homeController: get_recommendations:", error);
+      // Рекомендації другорядні: не ламаємо кошик
+      return responseReturn(res, 200, { products: [] });
+    }
+  };
+
   get_categories = async (req, res) => {
     try {
       const categories = await categoryModel.find({});

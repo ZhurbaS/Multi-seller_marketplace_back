@@ -24,6 +24,22 @@ const customerSchema = new Schema(
       type: String,
       required: true,
     },
+    // Збережені під час оформлення: інші отримувачі й організації (до 10 кожних)
+    savedRecipients: {
+      type: [
+        {
+          lastName: String,
+          firstName: String,
+          middleName: { type: String, default: "" },
+          phone: String,
+        },
+      ],
+      default: [],
+    },
+    savedCompanies: {
+      type: [{ companyName: String, edrpou: String, ipn: { type: String, default: "" } }],
+      default: [],
+    },
   },
   { timestamps: true }
 );

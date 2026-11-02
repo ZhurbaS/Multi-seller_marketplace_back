@@ -205,3 +205,123 @@ test("політика: нормалізація некоректних знач
   assert.equal(n.individual.shippingPayerDefect, "seller");
   assert.equal(n.enabled, true);
 });
+
+// ---------- Доставка ----------
+const shipping = require("../utiles/shipping");
+const base = { deliveryType: "nova_poshta_warehouse", name: "Іван", phone: "050 123-45-67", district: "Київська", city: "Київ", warehouse: "12" };
+
+test("доставка: телефон нормалізується до +380XXXXXXXXX", () => {
+  for (const p of ["0501234567", "+380501234567", "380501234567", "(050) 123 45 67", "501234567"]) {
+    assert.equal(shipping.normalizePhone(p), "+380501234567", p);
+  }
+  for (const p of ["", "12345", "+48501234567", "050123456", "abc"]) assert.equal(shipping.normalizePhone(p), null, p);
+});
+
+test("доставка: Нова пошта на відділення — область, місто, № відділення обов'язкові", () => {
+  const ok = shipping.sanitizeShipping(base);
+  assert.equal(ok.value.phone, "+380501234567");
+  assert.equal(ok.value.warehouse, "12");
+  for (const f of ["district", "city", "warehouse", "name", "phone", "deliveryType"]) {
+    assert.ok(shipping.sanitizeShipping({ ...base, [f]: "" }).error, f);
+  }
+  // зайві поля адреси для відділення не зберігаються
+  assert.equal(shipping.sanitizeShipping({ ...base, address: "вул. Х", post: "01001" }).value.address, "");
+});
+
+test("доставка: кур'єр — додатково адреса, індекс (5 цифр), район", () => {
+  const courier = { ...base, deliveryType: "ukrposhta", warehouse: "", address: "вул. Хрещатик, 1, кв. 2", post: "01001", area: "Шевченківський" };
+  assert.ok(shipping.sanitizeShipping(courier).value);
+  for (const f of ["address", "post", "area"]) assert.ok(shipping.sanitizeShipping({ ...courier, [f]: "" }).error, f);
+  assert.ok(shipping.sanitizeShipping({ ...courier, post: "123" }).error);
+});
+
+test("доставка: самовивіз не вимагає адреси; невідомий тип відхиляється", () => {
+  assert.ok(shipping.sanitizeShipping({ deliveryType: "pickup", name: "Іван", phone: "0501234567" }).value);
+  assert.ok(shipping.sanitizeShipping({ ...base, deliveryType: "drone" }).error);
+  assert.ok(shipping.sanitizeShipping(undefined).error);
+});
+
+test("доставка: інший отримувач — прізвище, ім'я, телефон обов'язкові, по батькові ні", () => {
+  const r = { other: true, lastName: "Петренко", firstName: "Олег", middleName: "", phone: "0671234567" };
+  const ok = shipping.sanitizeShipping({ ...base, recipient: r });
+  assert.equal(ok.value.recipient.other, true);
+  assert.equal(ok.value.recipient.phone, "+380671234567");
+  for (const f of ["lastName", "firstName", "phone"]) {
+    assert.ok(shipping.sanitizeShipping({ ...base, recipient: { ...r, [f]: "" } }).error, f);
+  }
+  // без галочки дані отримувача ігноруються
+  assert.equal(shipping.sanitizeShipping({ ...base, recipient: { ...r, other: false } }).value.recipient.other, false);
+});
+
+test("рекомендації: ранжування, без сміття, без кошикових товарів", () => {
+  const rec = require("../utiles/recommendations");
+  const cart = [{ _id: "a", category: "c1", price: 1000, discount: 0 }];
+  const candidates = [
+    { _id: "a", category: "c1", brand: "X", rating: 5, price: 900, discount: 0 }, // у кошику
+    { _id: "b", category: "c1", brand: "X", rating: 4, price: 100, discount: 0 }, // разом купують
+    { _id: "c", category: "c2", brand: "Y", rating: 5, price: 100, discount: 0 }, // без сигналу
+    { _id: "d", category: "c2", brand: "Y", rating: 5, price: 9000, discount: 0 }, // задорогий
+    { _id: "e", category: "c1", brand: "Z", rating: 3, price: 1200, discount: 0 }, // та сама категорія
+  ];
+  const out = rec.rankCandidates({ cart, candidates, co: new Map([["b", 5], ["d", 5]]) });
+  const ids = out.map((o) => String(o.p._id));
+  assert.deepEqual(ids, ["b", "e"]);
+  assert.equal(out[0].reason, "together");
+  assert.deepEqual(rec.rankCandidates({ cart, candidates: [] }), []);
+});
+
+test("доставка: поштомат, кур'єр НП без індексу, коментар", () => {
+  const sh = require("../utiles/shipping");
+  const base = { name: "Іван", phone: "+38(067)-323-57-85", district: "Київська", city: "Київ" };
+  assert.ok(sh.sanitizeShipping({ ...base, deliveryType: "nova_poshta_postomat", warehouse: "123" }).value);
+  assert.ok(sh.sanitizeShipping({ ...base, deliveryType: "nova_poshta_postomat" }).error);
+  const c = sh.sanitizeShipping({ ...base, deliveryType: "nova_poshta_courier", address: "вул. Хрещатик, 1, кв. 2" });
+  assert.equal(c.value.phone, "+380673235785");
+  assert.ok(sh.sanitizeShipping({ ...base, deliveryType: "ukrposhta", address: "вул. Х, 1" }).error);
+  assert.equal(sh.sanitizeComment("  a\r\n\r\n\r\n\r\nb   c ").length, 6);
+  assert.equal(sh.sanitizeComment("x".repeat(2000)).length, 1000);
+});
+
+test("збережені контакти: дубль оновлюється, ліміт 10, лише інший отримувач/юрособа", () => {
+  const sc = require("../utiles/savedContacts");
+  const r = (n, p) => ({ other: true, lastName: n, firstName: "І", middleName: "", phone: p });
+  let l = sc.upsertRecipient([], r("А", "+380501111111"));
+  l = sc.upsertRecipient(l, r("Б", "+380502222222"));
+  l = sc.upsertRecipient(l, r("А2", "+380501111111"));
+  assert.deepEqual(l.map((x) => x.lastName), ["А2", "Б"]);
+  assert.equal(sc.upsertRecipient(l, { other: false }).length, 2);
+  let big = [];
+  for (let i = 0; i < 15; i++) big = sc.upsertRecipient(big, r("X" + i, "+38050000000" + (i % 10) + i));
+  assert.equal(big.length, 10);
+  assert.deepEqual(sc.upsertCompany([], { kind: "individual" }), []);
+  const c = sc.upsertCompany([], { kind: "company", companyName: "ТОВ", edrpou: "14360570", ipn: "" });
+  assert.equal(sc.upsertCompany(c, { kind: "company", companyName: "ТОВ Нова", edrpou: "14360570" })[0].companyName, "ТОВ Нова");
+});
+
+test("Нова пошта: мапінг міст і відділень (fetch підмінено)", async () => {
+  process.env.NOVA_POSHTA_API_KEY = "test";
+  const np = require("../utiles/novaPoshta");
+  const orig = global.fetch;
+  const ref = "e221d627-391c-11dd-90d9-001a92567626";
+  global.fetch = async (url, opts) => {
+    const b = JSON.parse(opts.body);
+    const data =
+      b.calledMethod === "searchSettlements"
+        ? [{ Addresses: [{ DeliveryCity: ref, Ref: "s1", MainDescription: "Київ", Area: "Київська", Region: "", Present: "м. Київ, Київська обл." }, { Ref: "x", MainDescription: "Без доставки" }] }]
+        : [
+            { Ref: "w1", Number: "1", Description: "Відділення №1", ShortAddress: "Київ, вул. А", CategoryOfWarehouse: "Branch", TypeOfWarehouse: "t" },
+            { Ref: "p1", Number: "9", Description: "Поштомат №9", CategoryOfWarehouse: "Postomat", TypeOfWarehouse: np.POSTOMAT_TYPE_REF },
+          ];
+    return { json: async () => ({ success: true, data }) };
+  };
+  try {
+    const cities = await np.searchCities("Київ");
+    assert.deepEqual(cities.map((c) => c.ref), [ref]);
+    assert.deepEqual((await np.searchWarehouses(ref, "", "warehouse")).map((w) => w.ref), ["w1"]);
+    assert.deepEqual((await np.searchWarehouses(ref, "9", "postomat")).map((w) => w.ref), ["p1"]);
+    assert.deepEqual(await np.searchWarehouses("bad", "", "warehouse"), []);
+  } finally {
+    global.fetch = orig;
+    delete process.env.NOVA_POSHTA_API_KEY;
+  }
+});

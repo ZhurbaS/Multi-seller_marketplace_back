@@ -16,6 +16,7 @@ const categoryModel = require("../../models/categoryModel");
 const ledger = require("../../utiles/ledger");
 const couponService = require("../../utiles/couponService");
 const { sanitizeBuyer } = require("../../utiles/buyer");
+const { sanitizeShipping, sanitizeComment } = require("../../utiles/shipping");
 const orderLifecycle = require("../../utiles/orderLifecycle");
 const returnService = require("../../utiles/returnService");
 const invoiceService = require("../../utiles/invoiceService");
@@ -85,7 +86,7 @@ class orderController {
     // console.log(req.body);
     // Вартість доставки в замовлення НЕ входить (її оплачує покупець перевізнику
     // при отриманні), тому shipping_fee з клієнта ігноруємо.
-    const { products, shippingInfo, couponCode, buyer: buyerInput } = req.body;
+    const { products, shippingInfo: shippingInput, couponCode, buyer: buyerInput, comment: commentInput } = req.body;
     // customerId завжди з токена (customerAuthMiddleware), а НЕ з тіла запиту —
     // раніше клієнт міг підставити чужий userId.
     const userId = req.id;
@@ -100,6 +101,11 @@ class orderController {
       return responseReturn(res, 400, { error: buyerCheck.error });
     }
     const buyer = buyerCheck.value;
+    const shippingCheck = sanitizeShipping(shippingInput);
+    if (shippingCheck.error) {
+      return responseReturn(res, 400, { error: shippingCheck.error });
+    }
+    const shippingInfo = shippingCheck.value;
 
     const tempDate = moment(Date.now()).format("LLL");
 
@@ -283,6 +289,7 @@ class orderController {
               }
             : {}),
           buyer,
+          comment: sanitizeComment(commentInput),
           has_preorder: hasPreorder,
           payment_status: "unpaid",
           delivery_status: "pending",
@@ -328,6 +335,20 @@ class orderController {
       for (const cardId of cardProductsId) {
         // лише власні позиції кошика
         await cardModel.deleteOne({ _id: cardId, userId });
+      }
+
+      // Запам'ятовуємо іншого отримувача та організацію для наступних замовлень (не критично для замовлення)
+      try {
+        const saved = require("../../utiles/savedContacts");
+        const customerModel = require("../../models/customerModel");
+        const cust = await customerModel.findById(userId).select("savedRecipients savedCompanies");
+        if (cust) {
+          cust.savedRecipients = saved.upsertRecipient(cust.savedRecipients.map((x) => x.toObject()), shippingInfo.recipient);
+          cust.savedCompanies = saved.upsertCompany(cust.savedCompanies.map((x) => x.toObject()), buyer);
+          await cust.save();
+        }
+      } catch (e) {
+        console.error("💥 saved contacts:", e.message);
       }
 
       // Автоскасування неоплачених замовлень робить фонова перевірка
@@ -413,14 +434,18 @@ class orderController {
     try {
       let orders = [];
       if (status !== "all") {
-        orders = await customerOrderModel.find({
-          customerId: new ObjectId(customerId),
-          delivery_status: status,
-        });
+        orders = await customerOrderModel
+          .find({
+            customerId: new ObjectId(customerId),
+            delivery_status: status,
+          })
+          .sort({ createdAt: -1 });
       } else {
-        orders = await customerOrderModel.find({
-          customerId: new ObjectId(customerId),
-        });
+        orders = await customerOrderModel
+          .find({
+            customerId: new ObjectId(customerId),
+          })
+          .sort({ createdAt: -1 });
       }
 
       responseReturn(res, 200, {
