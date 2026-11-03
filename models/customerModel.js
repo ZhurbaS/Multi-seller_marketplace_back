@@ -53,6 +53,12 @@ const customerSchema = new Schema(
       ],
       default: [],
     },
+    // Зміна e-mail: очікує підтвердження кодом (код — лише у вигляді HMAC)
+    pendingEmail: {
+      type: { email: String, codeHash: String, expiresAt: Date, sentAt: Date, attempts: { type: Number, default: 0 } },
+      default: undefined,
+      select: false,
+    },
     savedCompanies: {
       type: [{ companyName: String, edrpou: String, ipn: { type: String, default: "" } }],
       default: [],

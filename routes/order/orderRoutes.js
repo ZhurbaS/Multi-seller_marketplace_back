@@ -1,4 +1,5 @@
 const orderController = require("../../controllers/order/orderController");
+const shippingEdit = require("../../controllers/order/shippingEditController");
 const {
   authMiddleware,
   customerAuthMiddleware,
@@ -27,6 +28,17 @@ router.get(
   "/home/customer/get-orders-details/:orderId",
   customerAuthMiddleware,
   orderController.get_orders_details
+);
+// Зміна отримувача й доставки покупцем (до відправлення)
+router.get(
+  "/home/customer/orders/:orderId/shipping-edit",
+  customerAuthMiddleware,
+  shippingEdit.check
+);
+router.put(
+  "/home/customer/orders/:orderId/shipping",
+  customerAuthMiddleware,
+  shippingEdit.update
 );
 // Рахунок юрособи (PDF)
 router.get(

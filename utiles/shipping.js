@@ -72,15 +72,23 @@ function sanitizeShipping(input) {
 
   const r = s.recipient && typeof s.recipient === "object" ? s.recipient : {};
   if (r.other === true || r.other === "true") {
-    const lastName = str(r.lastName, 60);
-    const firstName = str(r.firstName, 60);
-    if (!lastName) return { error: "Вкажіть прізвище отримувача" };
-    if (!firstName) return { error: "Вкажіть ім'я отримувача" };
-    const rPhone = normalizePhone(r.phone);
-    if (!rPhone) return { error: `Телефон отримувача: ${PHONE_ERR.toLowerCase()}` };
-    out.recipient = { other: true, lastName, firstName, middleName: str(r.middleName, 60), phone: rPhone };
+    const rec = sanitizeRecipient(r);
+    if (rec.error) return rec;
+    out.recipient = rec.value;
   }
   return { value: out };
+}
+
+// Інший отримувач: прізвище, ім'я, (по батькові), телефон → { value: { other: true, … } } | { error }
+function sanitizeRecipient(r) {
+  const x = r && typeof r === "object" ? r : {};
+  const lastName = str(x.lastName, 60);
+  const firstName = str(x.firstName, 60);
+  if (!lastName) return { error: "Вкажіть прізвище отримувача" };
+  if (!firstName) return { error: "Вкажіть ім'я отримувача" };
+  const rPhone = normalizePhone(x.phone);
+  if (!rPhone) return { error: `Телефон отримувача: ${PHONE_ERR.toLowerCase()}` };
+  return { value: { other: true, lastName, firstName, middleName: str(x.middleName, 60), phone: rPhone } };
 }
 
 // Коментар до замовлення (контакт, побажання): до 1000 символів, переноси рядків зберігаємо
@@ -115,4 +123,4 @@ function sanitizeAddress(input) {
   };
 }
 
-module.exports = { TYPES, normalizePhone, sanitizeShipping, sanitizeComment, sanitizeAddress };
+module.exports = { TYPES, normalizePhone, sanitizeShipping, sanitizeRecipient, sanitizeComment, sanitizeAddress };

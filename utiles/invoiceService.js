@@ -202,8 +202,26 @@ async function send(order) {
 }
 
 // Виставити + надіслати (виклик із startPayment). Збій листа не скасовує рахунок.
-async function issueAndSend(order) {
+const CHANNELS = ["email", "viber", "whatsapp"];
+const normChannel = (c) => (CHANNELS.includes(c) ? c : "email");
+
+// channel: куди покупець просив надіслати рахунок. email — надсилаємо листом автоматично;
+// viber/whatsapp — автоматично не надсилаємо (потрібен бізнес-API месенджера): рахунок лишається
+// «очікує надсилання», адмін бачить канал і телефон і надсилає PDF вручну; покупець завжди може
+// завантажити його в кабінеті.
+async function issueAndSend(order, { channel } = {}) {
+  const ch = normChannel(channel);
   const issued = await issue(order);
+  if (issued.invoice?.channel !== ch && ["awaiting", "sent"].includes(issued.invoice?.status)) {
+    await customerOrderModel.updateOne(
+      { _id: order._id },
+      { $set: { "invoice.channel": ch, "invoice.contact": ch === "email" ? null : order.shippingInfo?.phone || null } }
+    );
+    issued.invoice.channel = ch;
+  }
+  if (ch !== "email" && issued.invoice?.status === "awaiting") {
+    return { order: issued, sent: false, to: null, channel: ch };
+  }
   if (issued.invoice?.status === "awaiting" || issued.invoice?.status === "sent") {
     // Не надсилаємо вдруге, якщо вже надіслано
     if (issued.invoice.status === "sent") return { order: issued, sent: true, to: issued.invoice.sentTo };

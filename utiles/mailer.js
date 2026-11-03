@@ -7,12 +7,14 @@
 const isConfigured = () => !!process.env.RESEND_API_KEY && !!process.env.MAIL_FROM;
 
 // attachments: [{ filename, content: Buffer }] (передаються в Resend як base64)
-async function sendMail({ to, subject, text, attachments }) {
+async function sendMail({ to, subject, text, attachments, footer = "full" }) {
   if (!isConfigured()) {
     console.log(`📧 Лист не надіслано (пошту не налаштовано): ${to} — ${subject}`);
     return false;
   }
   try {
+    // Підпис і контакти додаємо до кожного листа покупцю; footer: "full" | "plain" | false
+    if (footer) text = `${String(text).replace(/\s+$/, "")}\n${await require("./mailFooter").buildFooter(footer)}`;
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {

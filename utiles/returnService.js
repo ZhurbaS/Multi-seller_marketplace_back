@@ -214,7 +214,7 @@ async function notifyCustomer(event, rr) {
     ]);
     if (!customer.email || !order) return;
     const { subject, text } = TEXTS[event](rr, { policy, label: orderLabel(order) });
-    await mailer.sendMail({ to: customer.email, subject, text });
+    await mailer.sendMail({ to: customer.email, subject, text, footer: "plain" });
   } catch (e) {
     console.error("📧 notifyCustomer:", e.message);
   }
@@ -223,7 +223,7 @@ async function notifyCustomer(event, rr) {
 async function notifyAdmin(subject, text) {
   if (!process.env.ADMIN_EMAIL) return;
   try {
-    await mailer.sendMail({ to: process.env.ADMIN_EMAIL, subject, text });
+    await mailer.sendMail({ to: process.env.ADMIN_EMAIL, subject, text, footer: false });
   } catch (e) {
     console.error("📧 notifyAdmin:", e.message);
   }

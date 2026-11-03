@@ -102,7 +102,7 @@ class PaymentError extends Error {
   }
 }
 
-async function startPayment(order, method) {
+async function startPayment(order, method, opts = {}) {
   if (method !== "invoice" && (!METHODS.includes(method) || !isMethodAvailable(method))) {
     throw new PaymentError("Цей спосіб оплати недоступний");
   }
@@ -127,13 +127,14 @@ async function startPayment(order, method) {
   if (method === "invoice") {
     const invoiceService = require("../utiles/invoiceService");
     try {
-      const r = await invoiceService.issueAndSend(order);
+      const r = await invoiceService.issueAndSend(order, { channel: opts.invoiceChannel });
       return {
         type: "invoice",
         number: r.order?.invoice?.number || null,
         status: r.order?.invoice?.status || null,
         dueAt: r.order?.invoice?.dueAt || null,
         emailed: !!r.sent,
+        channel: r.order?.invoice?.channel || "email",
         to: r.to || null,
       };
     } catch (e) {

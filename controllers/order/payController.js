@@ -36,7 +36,7 @@ class payController {
       // «За реквізитами» (рахунок на email) — для всіх покупців, фізосіб і юросіб; доступний лише
       // якщо адмін заповнив реквізити магазину.
       if (await require("../../utiles/invoiceService").isAvailable()) {
-        list.push({ id: "invoice", title: "Оплата за реквізитами (рахунок на e-mail)" });
+        list.push({ id: "invoice", title: "Оплата за реквізитами (рахунок)" });
       }
       responseReturn(res, 200, { methods: list });
     } catch (error) {
@@ -48,10 +48,10 @@ class payController {
   // Старт оплати: сума береться з БД, а не з запиту.
   async start(req, res) {
     try {
-      const { orderId, method } = req.body || {};
+      const { orderId, method, invoiceChannel } = req.body || {};
       const order = await loadOwnOrder(req, res, orderId);
       if (!order) return;
-      const result = await payments.startPayment(order, String(method));
+      const result = await payments.startPayment(order, String(method), { invoiceChannel });
       responseReturn(res, 200, result);
     } catch (error) {
       if (error instanceof payments.PaymentError) {

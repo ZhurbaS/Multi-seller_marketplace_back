@@ -41,6 +41,9 @@ const customerOrderSchema = new Schema(
     orderNumber: { type: Number, default: undefined, index: true, sparse: true },
     // Номер накладної перевізника (вносить адмін) і події, про які вже надіслано листи
     trackingNumber: { type: String, default: "" },
+    // Покупець змінив отримувача/доставку до відправлення: остання зміна й історія (до 20 записів)
+    shippingChangedAt: { type: Date, default: null },
+    shippingChanges: { type: [Object], default: [] },
     notifiedEvents: { type: [String], default: [] },
     has_preorder: { type: Boolean, default: false },
     // Згода покупця з публічною офертою (редакція й хеш тексту на момент оформлення); немає, якщо оферту не було опубліковано
@@ -84,6 +87,8 @@ const customerOrderSchema = new Schema(
       dueAt: { type: Date, default: null },
       sentAt: { type: Date, default: null },
       sentTo: { type: String, default: null },
+      channel: { type: String, default: "email" }, // куди покупець просив надіслати рахунок: email | viber | whatsapp
+      contact: { type: String, default: null }, // телефон для месенджера
       sendError: { type: String, default: null },
       company: { type: Object, default: undefined }, // знімок реквізитів магазину на момент виставлення
     },
