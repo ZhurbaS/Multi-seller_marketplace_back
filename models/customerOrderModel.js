@@ -89,6 +89,8 @@ const customerOrderSchema = new Schema(
       sentTo: { type: String, default: null },
       channel: { type: String, default: "email" }, // куди покупець просив надіслати рахунок: email | viber | whatsapp
       contact: { type: String, default: null }, // телефон для месенджера
+      messageId: { type: String, default: null }, // ID повідомлення в месенджері (для вебхука статусів)
+      messageStatus: { type: String, default: null }, // sent | delivered | read | failed
       sendError: { type: String, default: null },
       company: { type: Object, default: undefined }, // знімок реквізитів магазину на момент виставлення
     },

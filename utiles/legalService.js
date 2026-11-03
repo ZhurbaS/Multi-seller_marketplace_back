@@ -43,11 +43,14 @@ function envOf(raw) {
 
 const lastSnapshot = (st) => (st.snapshots || []).at(-1) || null;
 
+// Поля «Бренд/Домен/E-mail/Години» спільні для всіх документів (раніше зберігались у оферті)
+const sharedVars = (raw) => raw.legal?._vars || raw.legal?.oferta?.vars || {};
+
 // Рендер поточної чернетки; date не підставляємо (для baseHash), якщо withDate не передано
 function renderDraft(slug, st, raw, date) {
   const d = def(slug);
   const template = st.template || d.template;
-  const values = docs.buildValues({ ...envOf(raw), vars: st.vars, date });
+  const values = docs.buildValues({ ...envOf(raw), vars: sharedVars(raw), date });
   return { template, ...docs.render(template, values) };
 }
 
@@ -63,7 +66,13 @@ async function adminState(slug) {
     title: def(slug).title,
     template: preview.template,
     isDefaultTemplate: !st.template || st.template === def(slug).template,
-    vars: { brand: st.vars?.brand || "", domain: st.vars?.domain || "", claimsEmail: st.vars?.claimsEmail || "" },
+    vars: {
+      brand: sharedVars(raw).brand || "",
+      domain: sharedVars(raw).domain || "",
+      claimsEmail: sharedVars(raw).claimsEmail || "",
+      hours: sharedVars(raw).hours || "",
+    },
+    path: docs.DOCS[slug].path,
     published: !!st.published,
     version: last?.version || 0,
     publishedAt: last?.at || null,
@@ -105,9 +114,10 @@ async function save(slug, body) {
   const v = docs.sanitizeVars(body?.vars);
   if (v.error) throw new LegalError(v.error);
 
-  const raw = await loadRaw();
-  const st = { ...(raw.legal?.[slug] || {}), template: t.value, vars: v.value };
-  const patch = { template: t.value, vars: v.value };
+  const raw0 = await loadRaw();
+  const raw = { ...raw0, legal: { ...(raw0.legal || {}), _vars: v.value } };
+  const st = { ...(raw.legal?.[slug] || {}), template: t.value };
+  const patch = { template: t.value };
 
   if (st.published) {
     const base = renderDraft(slug, st, raw);
@@ -119,6 +129,7 @@ async function save(slug, body) {
     }
     patch.snapshots = withSnapshot(st, base, (date) => renderDraft(slug, st, raw, date).text);
   }
+  await storeSettingsModel.findOneAndUpdate({ key: "main" }, { $set: { "legal._vars": v.value } }, { upsert: true });
   await writeState(slug, patch);
   return adminState(slug);
 }
@@ -169,6 +180,34 @@ async function publicDoc(slug) {
   return { published: true, title: d.title, text: last.text, version: last.version, effectiveAt: last.at };
 }
 
+// Актуальні опубліковані редакції вказаних документів → [{ doc, version, hash }]
+async function publishedRefs(slugs) {
+  const raw = await loadRaw();
+  const out = [];
+  for (const slug of slugs) {
+    const st = raw.legal?.[slug] || {};
+    const last = lastSnapshot(st);
+    if (st.published && last) out.push({ doc: slug, version: last.version, hash: last.hash });
+  }
+  return out;
+}
+
+// Згода при реєстрації / першому вході: якщо оферта чи політика конфіденційності опубліковані — потрібна
+// галочка; повертає записи для збереження в акаунті. marketing — окрема необов'язкова згода.
+// → { ok: true, records, marketing } | { ok: false, error }
+async function consentFor({ accepted, marketing, method = "checkbox" }) {
+  const refs = await publishedRefs(["oferta", "privacy"]);
+  if (refs.length && accepted !== true) {
+    return { ok: false, error: "Підтвердіть, що ознайомились з публічною офертою та політикою конфіденційності" };
+  }
+  const at = new Date();
+  return {
+    ok: true,
+    records: refs.map((r) => ({ ...r, at, method })),
+    marketing: marketing === true ? { granted: true, at, method } : { granted: false, at, method },
+  };
+}
+
 // Для оформлення замовлення: якщо оферта опублікована — потрібна згода; повертає запис для збереження в замовленні.
 // → { ok: true, acceptance } (acceptance = null, якщо оферта не показується) | { ok: false, error }
 async function acceptanceFor(slug, accepted) {
@@ -179,7 +218,9 @@ async function acceptanceFor(slug, accepted) {
   if (accepted !== true) {
     return { ok: false, error: "Підтвердіть, що ознайомились з публічною офертою та приймаєте її умови" };
   }
-  return { ok: true, acceptance: { doc: slug, version: last.version, hash: last.hash, acceptedAt: new Date() } };
+  // Разом фіксуємо редакції пов'язаних документів, що діяли на момент замовлення
+  const related = (await publishedRefs(["delivery", "returns", "warranty", "privacy"])).map((r) => ({ doc: r.doc, version: r.version, hash: r.hash }));
+  return { ok: true, acceptance: { doc: slug, version: last.version, hash: last.hash, acceptedAt: new Date(), related } };
 }
 
 module.exports = {
@@ -191,4 +232,6 @@ module.exports = {
   publicStatus,
   publicDoc,
   acceptanceFor,
+  publishedRefs,
+  consentFor,
 };

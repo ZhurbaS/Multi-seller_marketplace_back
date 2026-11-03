@@ -165,6 +165,32 @@ async function send(order) {
   );
   if (!claimed) return { sent: false, to: null, error: "Надсилання вже виконується", busy: true };
   try {
+    // Месенджер: автоматично — якщо налаштовано API; інакше надсилає адмін вручну (e-mail не дублюємо).
+    // Якщо відправка в месенджер не вдалась — страхуємося листом на e-mail.
+    const ch = order.invoice?.channel;
+    let messengerNote = null;
+    if (ch && ch !== "email") {
+      const messengers = require("./messengers");
+      const m = await messengers.sendInvoice(ch, { order, filename: `rahunok-${order.invoice.number}.pdf` });
+      if (m.ok) {
+        await customerOrderModel.updateOne(
+          { _id: order._id, "invoice.status": { $in: ["awaiting", "sent"] } },
+          {
+            $set: {
+              "invoice.status": "sent",
+              "invoice.sentAt": new Date(),
+              "invoice.sentTo": `${ch}: ${order.invoice.contact || order.shippingInfo?.phone || ""}`,
+              "invoice.sendError": null,
+              "invoice.messageId": m.id || null,
+              "invoice.messageStatus": "sent",
+            },
+          }
+        );
+        return { sent: true, to: order.invoice.contact || null, error: null, channel: ch };
+      }
+      if (m.skipped) return { sent: false, to: null, error: null, manual: true, channel: ch };
+      messengerNote = `Не вдалося надіслати в ${ch === "viber" ? "Viber" : "WhatsApp"} (${m.error}) — надіслано на e-mail`;
+    }
     const to = await customerEmail(order.customerId);
     if (!to) {
       await customerOrderModel.updateOne(
@@ -192,7 +218,7 @@ async function send(order) {
     await customerOrderModel.updateOne(
       { _id: order._id, "invoice.status": { $in: ["awaiting", "sent"] } },
       ok
-        ? { $set: { "invoice.status": "sent", "invoice.sentAt": new Date(), "invoice.sentTo": to, "invoice.sendError": null } }
+        ? { $set: { "invoice.status": "sent", "invoice.sentAt": new Date(), "invoice.sentTo": to, "invoice.sendError": messengerNote } }
         : { $set: { "invoice.sendError": "Лист не надіслано (перевірте налаштування пошти) — надішліть повторно", "invoice.sentTo": to } }
     );
     return { sent: ok, to, error: ok ? null : "Лист не надіслано" };
@@ -219,14 +245,12 @@ async function issueAndSend(order, { channel } = {}) {
     );
     issued.invoice.channel = ch;
   }
-  if (ch !== "email" && issued.invoice?.status === "awaiting") {
-    return { order: issued, sent: false, to: null, channel: ch };
-  }
   if (issued.invoice?.status === "awaiting" || issued.invoice?.status === "sent") {
     // Не надсилаємо вдруге, якщо вже надіслано
     if (issued.invoice.status === "sent") return { order: issued, sent: true, to: issued.invoice.sentTo };
     const r = await send(issued);
     const fresh = await customerOrderModel.findById(order._id);
+    if (r.manual) return { order: fresh, sent: false, to: null, channel: ch };
     // Лист уже надсилає паралельний запит — вважаємо успішним, якщо статус «sent»
     if (r.busy) return { order: fresh, sent: fresh.invoice?.status === "sent", to: fresh.invoice?.sentTo };
     return { order: fresh, ...r };

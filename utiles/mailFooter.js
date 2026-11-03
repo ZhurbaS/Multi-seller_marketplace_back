@@ -66,7 +66,7 @@ async function buildFooter(mode = "full") {
     const invoiceLib = require("./invoice");
     const raw = (await storeSettingsModel.findOne({ key: "main" }).lean()) || {};
     const company = invoiceLib.normalizeCompany(raw.company);
-    const vars = raw.legal?.oferta?.vars || {};
+    const vars = raw.legal?._vars || raw.legal?.oferta?.vars || {};
     const domain = vars.domain ? `https://${vars.domain}` : "";
     const site = front() || domain;
     const products = mode === "full" ? await pickProducts() : [];

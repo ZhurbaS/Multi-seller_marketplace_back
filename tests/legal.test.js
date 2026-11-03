@@ -153,3 +153,57 @@ test("reset повертає типовий текст; невідомий до�
   assert.equal((await svc.resetTemplate("oferta")).isDefaultTemplate, true);
   await assert.rejects(svc.adminState("nope"), (e) => e.status === 404);
 });
+
+test("усі юридичні документи: типові тексти рендеряться без невідомих змінних", () => {
+  const values = docs.buildValues({
+    company: { ...company, vatPayer: false, phone: "+380501234567" },
+    returns: { individual: { withdrawalDays: 14, shippingPayerWithdrawal: "customer" }, refundDeadlineDays: 7 },
+    vars: { brand: "TechScout", domain: "techscout.ua", claimsEmail: "claims@techscout.ua", hours: "Пн–Пт 9:00–18:00" },
+    date: "01 січня 2027 р.",
+    cardDays: 3,
+  });
+  for (const [slug, d] of Object.entries(docs.DOCS)) {
+    const r = docs.render(d.template, values);
+    assert.deepEqual(r.missing, [], `${slug}: незаповнені змінні ${r.missing}`);
+    assert.ok(!/\{\{/.test(r.text), `${slug}: лишились маркери`);
+    assert.ok(d.path.startsWith("/"));
+    assert.ok(r.text.length > 800, `${slug}: надто короткий`);
+  }
+});
+
+test("спільні поля (бренд/домен) діють для всіх документів", async () => {
+  reset();
+  await svc.save("oferta", { template: docs.DOCS.oferta.template, vars: { brand: "TechScout", domain: "techscout.ua", hours: "Пн–Пт 9–18" } });
+  const st = await svc.adminState("privacy");
+  assert.equal(st.vars.brand, "TechScout");
+  assert.equal(st.vars.hours, "Пн–Пт 9–18");
+  assert.deepEqual(st.preview.missing, []);
+  const pub = await svc.setPublished("privacy", true);
+  assert.equal(pub.published, true);
+  assert.match((await svc.publicDoc("privacy")).text, /TechScout/);
+});
+
+test("consentFor: без опублікованих документів згода не потрібна; з ними — обов'язкова, маркетинг окремо", async () => {
+  reset();
+  const none = await svc.consentFor({ accepted: false });
+  assert.equal(none.ok, true);
+  assert.deepEqual(none.records, []);
+  await svc.save("oferta", { template: docs.DOCS.oferta.template, vars: { brand: "TechScout", domain: "techscout.ua" } });
+  await svc.setPublished("oferta", true);
+  await svc.setPublished("privacy", true);
+  assert.equal((await svc.consentFor({ accepted: false })).ok, false);
+  const ok = await svc.consentFor({ accepted: true, marketing: false });
+  assert.equal(ok.ok, true);
+  assert.deepEqual(ok.records.map((r) => r.doc).sort(), ["oferta", "privacy"]);
+  assert.equal(ok.marketing.granted, false);
+  assert.equal((await svc.consentFor({ accepted: true, marketing: true })).marketing.granted, true);
+});
+
+test("acceptanceFor фіксує пов'язані документи", async () => {
+  reset();
+  await svc.save("oferta", { template: docs.DOCS.oferta.template, vars: { brand: "TechScout", domain: "techscout.ua" } });
+  await svc.setPublished("oferta", true);
+  await svc.setPublished("returns", true);
+  const a = await svc.acceptanceFor("oferta", true);
+  assert.deepEqual(a.acceptance.related.map((r) => r.doc), ["returns"]);
+});

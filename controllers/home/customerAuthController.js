@@ -7,8 +7,15 @@ const { createToken } = require('../../utiles/tokenCreate');
 class customerAuthController {
   customer_register = async (req, res) => {
     // console.log(req.body);
-    const { name, email, phone, password } = req.body;
+    const { name, email, phone, password, acceptLegal, marketing } = req.body;
     try {
+      // Згода з офертою й політикою конфіденційності (коли їх опубліковано) + окрема необов'язкова згода на розсилки
+      const consent = await require('../../utiles/legalService').consentFor({
+        accepted: acceptLegal === true,
+        marketing: marketing === true,
+        method: 'register',
+      });
+      if (!consent.ok) return responseReturn(res, 400, { error: consent.error });
       const customer = await customerModel.findOne({ email });
       if (customer) {
         return responseReturn(res, 404, { error: 'Користувач з таким Email вже існує' });
@@ -19,10 +26,16 @@ class customerAuthController {
           phone: phone.trim(),
           password: await bcrypt.hash(password, 10),
           method: 'manually',
+          consents: consent.records,
+          marketing: consent.marketing,
         });
         await sellerCustomerModel.create({
           myId: createdCustomer.id,
         });
+        // Якщо до реєстрації користувач вже наповнив кошик як гість — переносимо його
+        const acc = require('../../utiles/accountService');
+        const guestId = await acc.guestIdFromRequest(req);
+        if (guestId) await acc.mergeGuestCart(guestId, createdCustomer._id);
         const token = await createToken({
           id: createdCustomer.id,
           role: 'customer',
@@ -62,6 +75,11 @@ class customerAuthController {
         .findOne({ email })
         .select('+password');
       if (customer) {
+        if (!customer.password) {
+          return responseReturn(res, 400, {
+            error: 'Для цього акаунта пароль не встановлено — увійдіть за кодом з e-mail або через Google',
+          });
+        }
         const match = await bcrypt.compare(password, customer.password);
         if (match) {
           const token = await createToken({

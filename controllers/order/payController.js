@@ -20,6 +20,16 @@ async function loadOwnOrder(req, res, orderId) {
   return order;
 }
 
+// Канал рахунку з запиту: лише e-mail або ввімкнений адміном месенджер
+async function allowedChannel(ch) {
+  try {
+    const list = await require("../../utiles/messengers").publicChannels();
+    return list.includes(ch) ? ch : "email";
+  } catch {
+    return "email";
+  }
+}
+
 const publicState = (order) => ({
   orderId: order._id,
   payment_status: order.payment_status,
@@ -51,7 +61,7 @@ class payController {
       const { orderId, method, invoiceChannel } = req.body || {};
       const order = await loadOwnOrder(req, res, orderId);
       if (!order) return;
-      const result = await payments.startPayment(order, String(method), { invoiceChannel });
+      const result = await payments.startPayment(order, String(method), { invoiceChannel: await allowedChannel(invoiceChannel) });
       responseReturn(res, 200, result);
     } catch (error) {
       if (error instanceof payments.PaymentError) {

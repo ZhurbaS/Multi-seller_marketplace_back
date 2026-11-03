@@ -49,7 +49,7 @@ class legalController {
       const state = await legal.setPublished(req.params.slug, req.body?.published === true);
       responseReturn(res, 200, {
         ...state,
-        message: state.published ? "Оферту опубліковано — покупці її бачать і приймають при оформленні" : "Показ оферти вимкнено",
+        message: state.published ? "Документ опубліковано — покупці його бачать" : "Показ документа вимкнено",
       });
     } catch (e) {
       fail(res, e, "admin_publish");

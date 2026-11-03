@@ -91,6 +91,9 @@ class orderController {
     // customerId завжди з токена (customerAuthMiddleware), а НЕ з тіла запиту —
     // раніше клієнт міг підставити чужий userId.
     const userId = req.id;
+    // Гостьовий акаунт має вказати e-mail (на нього йдуть підтвердження й рахунок)
+    const buyerAcc = await require("../../models/customerModel").findById(userId).select("email").lean();
+    if (!buyerAcc?.email) return responseReturn(res, 400, { error: "Вкажіть електронну пошту для підтвердження замовлення" });
 
     if (!Array.isArray(products) || products.length === 0) {
       return responseReturn(res, 400, { error: "Кошик порожній" });

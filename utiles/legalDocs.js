@@ -3,14 +3,21 @@
 
 const crypto = require("crypto");
 const { OFERTA_TITLE, OFERTA_TEMPLATE } = require("./legalDefaults");
+const T = require("./legalTemplates");
 
+// path — адреса сторінки на Сайті; consent — чи показувати документ у згоді при реєстрації
 const DOCS = {
-  oferta: { title: OFERTA_TITLE, template: OFERTA_TEMPLATE },
+  oferta: { title: OFERTA_TITLE, template: OFERTA_TEMPLATE, path: "/oferta", short: "Публічна оферта" },
+  delivery: { title: T.DELIVERY_TITLE, template: T.DELIVERY_TEMPLATE, path: "/delivery", short: "Доставка й оплата" },
+  returns: { title: T.RETURNS_TITLE, template: T.RETURNS_TEMPLATE, path: "/returns", short: "Обмін і повернення" },
+  warranty: { title: T.WARRANTY_TITLE, template: T.WARRANTY_TEMPLATE, path: "/warranty", short: "Гарантія" },
+  privacy: { title: T.PRIVACY_TITLE, template: T.PRIVACY_TEMPLATE, path: "/privacy", short: "Політика конфіденційності" },
+  cookies: { title: T.COOKIES_TITLE, template: T.COOKIES_TEMPLATE, path: "/cookies", short: "Політика cookies" },
 };
 
 const MAX_TEMPLATE = 60000;
 // Змінні, яким дозволено бути порожніми (підставляється порожній рядок)
-const OPTIONAL = new Set(["ipn_line", "phone_line"]);
+const OPTIONAL = new Set(["ipn_line", "phone_line", "hours_line"]);
 
 const MONTHS = [
   "січня", "лютого", "березня", "квітня", "травня", "червня",
@@ -34,13 +41,14 @@ function sanitizeVars(body) {
     .replace(/\/.*$/, "")
     .toLowerCase();
   const claimsEmail = str(b.claimsEmail, 120).toLowerCase();
+  const hours = str(b.hours, 120);
   if (domain && !/^[a-z0-9а-яіїєґ.-]+\.[a-z0-9а-яіїєґ-]{2,}$/i.test(domain)) {
     return { error: "Домен має вигляд example.ua (без http:// і слешів)" };
   }
   if (claimsEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(claimsEmail)) {
     return { error: "Некоректний e-mail для претензій" };
   }
-  return { value: { brand, domain, claimsEmail } };
+  return { value: { brand, domain, claimsEmail, hours } };
 }
 
 // → { value } | { error }
@@ -67,6 +75,7 @@ function buildValues({ company, returns, vars, date, cardDays }) {
     address: c.address || "",
     email: c.email || "",
     phone_line: c.phone ? `, тел.: ${c.phone}` : "",
+    hours_line: v.hours ? `Години роботи: ${v.hours}.` : "",
     claims_email: v.claimsEmail || c.email || "",
     vat_status: vatPayer
       ? `Продавець є платником податку на додану вартість (ставка ${c.vatPercent ?? 20}%).`
