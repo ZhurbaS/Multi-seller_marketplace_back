@@ -153,9 +153,7 @@ async function customerContact(customerId) {
   return c || {};
 }
 
-function orderLabel(order) {
-  return `№${String(order._id).slice(-8).toUpperCase()}`;
-}
+const { orderLabel } = require("./orderNumber");
 
 const TEXTS = {
   created: (rr, ctx) => ({
@@ -211,7 +209,7 @@ async function notifyCustomer(event, rr) {
   try {
     const [policy, order, customer] = await Promise.all([
       loadPolicy(),
-      customerOrderModel.findById(rr.orderId).select("_id").lean(),
+      customerOrderModel.findById(rr.orderId).select("_id orderNumber").lean(),
       customerContact(rr.customerId),
     ]);
     if (!customer.email || !order) return;
@@ -259,6 +257,7 @@ async function eligibilityFor(order) {
 async function newRequestDoc(order, fields, policy) {
   const rr = new ReturnRequest({
     orderId: order._id,
+    orderNumber: order.orderNumber,
     customerId: order.customerId,
     buyerKind: order.buyer?.kind === "company" ? "company" : "individual",
     refundDueAt: new Date(Date.now() + policy.refundDeadlineDays * DAY),
@@ -1035,6 +1034,7 @@ function customerView(rr) {
     _id: r._id,
     number: r.number,
     orderId: r.orderId,
+    orderNumber: r.orderNumber,
     kind: r.kind,
     reason: r.reason,
     resolution: r.resolution,

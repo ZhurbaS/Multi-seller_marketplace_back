@@ -60,6 +60,16 @@ router.put(
   settingsController.update_company
 );
 
+// Юридичні документи (публічна оферта): публічно — лише опубліковане; адмін редагує й вмикає показ
+const legalController = require("../controllers/legalController");
+router.get("/home/legal/status", legalController.status);
+router.get("/home/legal/:slug", legalController.public_doc);
+const adminOnly = [authMiddleware, requireRole("admin")];
+router.get("/admin/settings/legal/:slug", ...adminOnly, legalController.admin_get);
+router.put("/admin/settings/legal/:slug", ...adminOnly, legalController.admin_save);
+router.put("/admin/settings/legal/:slug/published", ...adminOnly, legalController.admin_publish);
+router.post("/admin/settings/legal/:slug/reset", ...adminOnly, legalController.admin_reset);
+
 // Продавець бачить свою комісію
 router.get(
   "/seller/commission-info",

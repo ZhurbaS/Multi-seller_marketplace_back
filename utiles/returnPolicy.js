@@ -32,7 +32,7 @@ function defaultPolicy() {
       withdrawalDays: 14,
       defectAllowed: true,
       defectDays: 365,
-      shippingPayerWithdrawal: "seller",
+      shippingPayerWithdrawal: "customer", // зворотну доставку при відмові від якісного товару оплачує покупець
       shippingPayerDefect: "seller",
     },
     company: {

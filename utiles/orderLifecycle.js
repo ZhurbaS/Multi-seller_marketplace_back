@@ -40,6 +40,7 @@ async function cancelWholeOrder(orderId) {
   await ledger.reverseForOrder(orderId);
   await couponService.releaseForOrder(orderId);
   await require("./invoiceService").cancelIfInvoice(orderId); // рахунок більше не діє
+  require("./orderNotify").notify(orderId, "cancelled");
   return prev;
 }
 

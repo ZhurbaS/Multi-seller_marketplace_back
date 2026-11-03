@@ -1,4 +1,4 @@
-// Рахунки на оплату для юросіб: виставлення, надсилання листом, повторне надсилання, PDF.
+// Рахунки на оплату (фізособи — «оплата за реквізитами», юрособи/ФОП): виставлення, надсилання листом, повторне надсилання, PDF.
 //
 // Життєвий цикл (order.invoice.status):
 //   awaiting → sent → paid            (awaiting: рахунок сформовано, лист не надіслано — адмін надсилає повторно)
@@ -33,7 +33,7 @@ async function isAvailable() {
   return invoiceLib.isCompanyConfigured(await loadCompany());
 }
 
-const orderLabel = (order) => `№${String(order._id).slice(-8).toUpperCase()}`;
+const { orderLabel } = require("./orderNumber");
 
 async function customerEmail(customerId) {
   const c = await customerModel.findById(customerId).select("email name").lean();
@@ -48,7 +48,7 @@ const lockFree = (field) => [{ [field]: null }, { [field]: { $lt: new Date(Date.
 async function revive(orderId) {
   const o = await customerOrderModel.findById(orderId);
   if (!o?.invoice?.number || o.payment_status === "paid") return null;
-  const days = o.invoice.company?.invoiceValidDays || 5;
+  const days = o.invoice.company?.invoiceValidDays || 3;
   return customerOrderModel.findByIdAndUpdate(
     orderId,
     {
@@ -84,9 +84,6 @@ async function cancelIfInvoice(orderId) {
 // Виставляє рахунок (ідемпотентно: повторний виклик повертає вже виставлений).
 // Повертає актуальний документ замовлення.
 async function issue(order) {
-  if (order.buyer?.kind !== "company") {
-    throw new InvoiceError("Рахунок виставляється лише юридичним особам та ФОП");
-  }
   if (order.invoice?.number) {
     // Покупець повернувся до оплати за рахунком після скасованого/простроченого — оживляємо
     if (["cancelled", "expired"].includes(order.invoice.status)) {
@@ -186,7 +183,8 @@ async function send(order) {
         `Доброго дня!\n\nДякуємо за замовлення ${orderLabel(order)}. У вкладенні — рахунок на оплату ${inv.number} ` +
         `на суму ₴${order.price}.\n\n` +
         `Рахунок дійсний до ${dueText}. Якщо оплата не надійде до цієї дати, замовлення буде автоматично скасоване.\n` +
-        `У призначенні платежу вкажіть номер рахунку ${inv.number}.\n\n` +
+        `Призначення платежу: ${invoiceLib.paymentPurpose(order, inv.number)}. Вкажіть його точно — за ним ми знайдемо ваш платіж.\n` +
+        `Оплатити можна з будь-якого банківського застосунку (переказ за IBAN) або в касі банку; сума має збігатися з рахунком.\n\n` +
         `Рахунок також доступний у вашому особистому кабінеті: ${publicFrontUrl()}/dashboard/order/details/${order._id}\n` +
         `Після надходження коштів ми підтвердимо оплату й передамо замовлення в обробку.`,
       attachments: [{ filename: `rahunok-${inv.number}.pdf`, content: pdf }],
@@ -229,7 +227,7 @@ async function resend(orderId, { extend = false } = {}) {
     throw new InvoiceError("Покупець обрав інший спосіб оплати — рахунок більше не діє", 409);
   }
   if (extend) {
-    const days = order.invoice.company?.invoiceValidDays || 5;
+    const days = order.invoice.company?.invoiceValidDays || 3;
     order = await customerOrderModel.findByIdAndUpdate(
       orderId,
       { $set: { "invoice.dueAt": new Date(Date.now() + days * DAY), "invoice.status": order.invoice.sentAt ? "sent" : "awaiting" } },

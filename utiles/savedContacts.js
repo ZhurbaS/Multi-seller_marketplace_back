@@ -27,4 +27,14 @@ function upsertCompany(list, b) {
   return upsert(list, item, (x) => x.edrpou);
 }
 
-module.exports = { MAX, upsertRecipient, upsertCompany };
+const MAX_ADDRESSES = 5;
+const addrKey = (a) => [a.deliveryType, a.cityRef || a.city, a.warehouseRef || a.warehouse, a.address].join("|").toLowerCase();
+
+// a — результат sanitizeAddress().value
+function upsertAddress(list, a) {
+  if (!a) return list || [];
+  const rest = (list || []).filter((x) => addrKey(x) !== addrKey(a));
+  return [a, ...rest].slice(0, MAX_ADDRESSES);
+}
+
+module.exports = { MAX, MAX_ADDRESSES, upsertRecipient, upsertCompany, upsertAddress };

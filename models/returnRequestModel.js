@@ -12,6 +12,7 @@ const { Schema, model } = require("mongoose");
 const returnRequestSchema = new Schema(
   {
     orderId: { type: Schema.ObjectId, required: true, index: true },
+    orderNumber: { type: Number, default: undefined }, // короткий номер замовлення (для відображення)
     customerId: { type: Schema.ObjectId, required: true, index: true },
     number: { type: String, index: true }, // зручний номер для листування, напр. R-3F9A2C
     kind: { type: String, enum: ["return", "cancellation"], required: true },

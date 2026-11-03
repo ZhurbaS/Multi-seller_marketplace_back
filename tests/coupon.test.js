@@ -194,7 +194,7 @@ test("політика: до відправки — лише скасуванн�
 
 test("політика: хто платить зворотну доставку за замовчуванням", () => {
   const pol = policy.defaultPolicy();
-  assert.equal(policy.defaultShippingPayer(pol, "individual", "withdrawal"), "seller");
+  assert.equal(policy.defaultShippingPayer(pol, "individual", "withdrawal"), "customer");
   assert.equal(policy.defaultShippingPayer(pol, "company", "withdrawal"), "customer");
   assert.equal(policy.defaultShippingPayer(pol, "company", "defect"), "seller");
 });
@@ -324,4 +324,19 @@ test("Нова пошта: мапінг міст і відділень (fetch п
     global.fetch = orig;
     delete process.env.NOVA_POSHTA_API_KEY;
   }
+});
+
+test("адреси: збереження без дублів, самовивіз не зберігається; номер/лейбл замовлення", () => {
+  const sh = require("../utiles/shipping");
+  const sc = require("../utiles/savedContacts");
+  const a = sh.sanitizeAddress({ deliveryType: "nova_poshta_warehouse", city: "Київ", district: "Київська", warehouse: "Відділення №1" });
+  assert.ok(a.value);
+  assert.equal(a.value.phone, undefined);
+  let l = sc.upsertAddress([], a.value);
+  l = sc.upsertAddress(l, { ...a.value });
+  assert.equal(l.length, 1);
+  assert.ok(sh.sanitizeAddress({ deliveryType: "pickup" }).error);
+  const { orderLabel } = require("../utiles/orderNumber");
+  assert.equal(orderLabel({ orderNumber: 100245 }), "№100245");
+  assert.equal(orderLabel({ _id: "6ae846f2dad2d87546544b94" }), "№544B94");
 });

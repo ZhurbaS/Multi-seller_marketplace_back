@@ -15,7 +15,7 @@ const monobank = require("./providers/monobank");
 const liqpay = require("./providers/liqpay");
 
 const METHODS = ["monobank", "liqpay", "mock", "cod"];
-// Оплата за рахунком (invoice) — лише для юросіб, див. utiles/invoiceService.js; доступність залежить від
+// Оплата за реквізитами/рахунком (invoice) — для фізосіб і юросіб, див. utiles/invoiceService.js; доступність залежить від
 // реквізитів магазину в БД, тому перевіряється окремо (асинхронно).
 
 function availableMethods() {
@@ -88,6 +88,7 @@ async function markOrderPaid(orderId, { provider, providerStatus, modifiedDate }
   // комісія магазину, знижка за сумою замовлення — див. utiles/ledger.js
   await ledger.recordPaidOrder(order, authOrders);
   await couponService.markRedeemed(order._id);
+  require("../utiles/orderNotify").notify(order._id, "paid");
   return { changed: true, order };
 }
 
@@ -110,9 +111,6 @@ async function startPayment(order, method) {
   }
   if (order.delivery_status === "cancelled") {
     throw new PaymentError("Замовлення скасовано");
-  }
-  if (method === "invoice" && order.buyer?.kind !== "company") {
-    throw new PaymentError("Оплата за рахунком доступна лише юридичним особам та ФОП");
   }
   // Покупець передумав і обрав інший спосіб — раніше виставлений рахунок більше не діє
   // (скасовуємо рахунок лише після того, як новий спосіб успішно стартував).

@@ -118,7 +118,7 @@ test("реквізити магазину: валідація", () => {
   assert.ok(inv.sanitizeCompany({ ...goodCompany, email: "не пошта" }).error);
   assert.equal(inv.isCompanyConfigured({}), false);
   assert.equal(inv.isCompanyConfigured(goodCompany), true);
-  assert.equal(inv.sanitizeCompany({ ...goodCompany, invoiceValidDays: "" }).value.invoiceValidDays, 5);
+  assert.equal(inv.sanitizeCompany({ ...goodCompany, invoiceValidDays: "" }).value.invoiceValidDays, 3);
 });
 
 test("суми рахунку: знижка, ПДВ у складі ціни", () => {
@@ -162,8 +162,11 @@ test("виставлення: лише юрособі, нумерація пос
   assert.equal(db.settings.invoiceSeq, 1);
   // наступне замовлення — наступний номер
   assert.equal((await service.issue(newOrder())).invoice.number, "РФ-00002");
-  // фізособі — відмова
-  await assert.rejects(service.issue(newOrder({ buyer: { kind: "individual" } })), /лише юридичним/);
+  // фізособі — рахунок теж виставляється (оплата за реквізитами)
+  const person = await service.issue(newOrder({ buyer: { kind: "individual" }, shippingInfo: { name: "Іван Петренко", phone: "+380671112233" } }));
+  assert.equal(person.invoice.number, "РФ-00003");
+  assert.equal(person.invoice.status, "awaiting");
+  assert.equal(person.payment_method, "invoice");
 });
 
 test("виставлення: без реквізитів магазину — помилка 503 і без номера", async () => {
@@ -276,4 +279,13 @@ test("паралельне надсилання не дублює лист", asy
   const [a, b] = await Promise.all([service.send(issued), service.send(issued)]);
   assert.equal(db.mails.length, 1);
   assert.ok(a.busy || b.busy);
+});
+
+test("рахунок фізособі: платник — ПІБ, призначення платежу з номером замовлення", () => {
+  const invoice = require("../utiles/invoice");
+  const person = { _id: "64b000000000000000000abc", orderNumber: 100123, buyer: { kind: "individual" }, shippingInfo: { name: "Іван Петренко", phone: "+380671112233" } };
+  assert.match(invoice.payerLine(person), /Іван Петренко/);
+  assert.equal(invoice.paymentPurpose(person, "РФ-00007"), "Оплата за рахунком РФ-00007 (замовлення №100123)");
+  const firm = { ...person, buyer: { kind: "company", companyName: "ТОВ Х", edrpou: "14360570", ipn: "" } };
+  assert.match(invoice.payerLine(firm), /ТОВ Х, код ЄДРПОУ\/РНОКПП 14360570/);
 });

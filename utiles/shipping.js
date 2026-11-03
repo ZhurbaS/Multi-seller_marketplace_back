@@ -39,11 +39,13 @@ function sanitizeShipping(input) {
     recipient: { other: false, lastName: "", firstName: "", middleName: "", phone: "" },
     // Ідентифікатори Нової пошти (для майбутнього створення ТТН); необов'язкові
     cityRef: "",
+    settlementRef: "",
     warehouseRef: "",
   };
   const ref = (v) => (/^[0-9a-f-]{36}$/i.test(String(v ?? "")) ? String(v).toLowerCase() : "");
   out.cityRef = ref(s.cityRef);
   out.warehouseRef = ref(s.warehouseRef);
+  out.settlementRef = ref(s.settlementRef);
 
   if (deliveryType !== "pickup") {
     out.district = str(s.district, 100);
@@ -91,4 +93,26 @@ function sanitizeComment(v) {
     .slice(0, 1000);
 }
 
-module.exports = { TYPES, normalizePhone, sanitizeShipping, sanitizeComment };
+// Збережена адреса доставки (без імені/телефону): тип, місто, відділення/поштомат або вулиця-будинок-квартира
+function sanitizeAddress(input) {
+  const r = sanitizeShipping({ ...(input || {}), name: "Адреса", phone: "0500000000" });
+  if (r.error) return r;
+  const v = r.value;
+  if (v.deliveryType === "pickup") return { error: "Самовивіз не зберігаємо як адресу" };
+  return {
+    value: {
+      deliveryType: v.deliveryType,
+      district: v.district,
+      city: v.city,
+      cityRef: v.cityRef,
+      settlementRef: v.settlementRef,
+      warehouse: v.warehouse,
+      warehouseRef: v.warehouseRef,
+      address: v.address,
+      post: v.post,
+      area: v.area,
+    },
+  };
+}
+
+module.exports = { TYPES, normalizePhone, sanitizeShipping, sanitizeComment, sanitizeAddress };

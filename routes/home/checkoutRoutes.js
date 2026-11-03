@@ -17,8 +17,10 @@ const npLimiter = rateLimit({
 // Збережені отримувачі й організації покупця
 router.get("/home/customer/checkout-data", customerAuthMiddleware, async (req, res) => {
   try {
-    const c = await customerModel.findById(req.id).select("savedRecipients savedCompanies").lean();
+    const c = await customerModel.findById(req.id).select("name phone savedRecipients savedCompanies savedAddresses").lean();
     res.json({
+      profile: { name: c?.name || "", phone: c?.phone || "" },
+      addresses: c?.savedAddresses || [],
       recipients: c?.savedRecipients || [],
       companies: c?.savedCompanies || [],
       novaPoshta: np.isEnabled(),
@@ -39,6 +41,40 @@ const removeSaved = (field) => async (req, res) => {
     res.status(500).json({ error: "Щось пішло не так" });
   }
 };
+router.delete("/home/customer/saved-address/:id", customerAuthMiddleware, removeSaved("savedAddresses"));
+
+// Додати адресу вручну (з «Налаштувань»)
+router.post("/home/customer/saved-address", customerAuthMiddleware, async (req, res) => {
+  try {
+    const { sanitizeAddress } = require("../../utiles/shipping");
+    const { upsertAddress } = require("../../utiles/savedContacts");
+    const a = sanitizeAddress(req.body);
+    if (a.error) return res.status(400).json({ error: a.error });
+    const c = await customerModel.findById(req.id).select("savedAddresses");
+    c.savedAddresses = upsertAddress(c.savedAddresses.map((x) => x.toObject()), a.value);
+    await c.save();
+    res.json({ addresses: c.savedAddresses });
+  } catch (e) {
+    console.error("💥 saved-address:", e.message);
+    res.status(500).json({ error: "Щось пішло не так" });
+  }
+});
+
+// Контактні дані профілю (ім'я, телефон)
+router.put("/home/customer/profile", customerAuthMiddleware, async (req, res) => {
+  try {
+    const name = String(req.body.name ?? "").trim().replace(/\s+/g, " ").slice(0, 100);
+    const phone = require("../../utiles/shipping").normalizePhone(req.body.phone);
+    if (name.length < 2) return res.status(400).json({ error: "Вкажіть ім'я" });
+    if (!phone) return res.status(400).json({ error: "Вкажіть коректний номер телефону, напр. +380501234567" });
+    await customerModel.updateOne({ _id: req.id }, { $set: { name, phone } });
+    res.json({ profile: { name, phone }, message: "Дані збережено" });
+  } catch (e) {
+    console.error("💥 profile:", e.message);
+    res.status(500).json({ error: "Щось пішло не так" });
+  }
+});
+
 router.delete("/home/customer/saved-recipient/:id", customerAuthMiddleware, removeSaved("savedRecipients"));
 router.delete("/home/customer/saved-company/:id", customerAuthMiddleware, removeSaved("savedCompanies"));
 

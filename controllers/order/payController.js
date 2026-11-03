@@ -33,10 +33,10 @@ class payController {
   async methods(req, res) {
     try {
       const list = payments.availableMethods();
-      // «За рахунком» — лише якщо адмін заповнив реквізити; фронт показує його тільки юрособам,
-      // а сервер усе одно перевіряє тип покупця при старті оплати.
+      // «За реквізитами» (рахунок на email) — для всіх покупців, фізосіб і юросіб; доступний лише
+      // якщо адмін заповнив реквізити магазину.
       if (await require("../../utiles/invoiceService").isAvailable()) {
-        list.push({ id: "invoice", title: "Безготівковий розрахунок за рахунком (для юросіб та ФОП)", businessOnly: true });
+        list.push({ id: "invoice", title: "Оплата за реквізитами (рахунок на e-mail)" });
       }
       responseReturn(res, 200, { methods: list });
     } catch (error) {

@@ -37,7 +37,14 @@ const customerOrderSchema = new Schema(
       percent: { type: Number, default: 0 },
       amount: { type: Number, default: 0 },
     },
+    // Короткий номер замовлення для покупця (100001…); у старих замовлень немає
+    orderNumber: { type: Number, default: undefined, index: true, sparse: true },
+    // Номер накладної перевізника (вносить адмін) і події, про які вже надіслано листи
+    trackingNumber: { type: String, default: "" },
+    notifiedEvents: { type: [String], default: [] },
     has_preorder: { type: Boolean, default: false },
+    // Згода покупця з публічною офертою (редакція й хеш тексту на момент оформлення); немає, якщо оферту не було опубліковано
+    legalAcceptance: { type: Object, default: undefined },
     // Коментар покупця до замовлення (до 1000 символів)
     comment: { type: String, default: "", maxlength: 1000 },
     // Купон (знижка фінансується магазином). Діє замість знижки за сумою, не разом із нею:

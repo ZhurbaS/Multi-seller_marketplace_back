@@ -36,6 +36,23 @@ const customerSchema = new Schema(
       ],
       default: [],
     },
+    savedAddresses: {
+      type: [
+        {
+          deliveryType: String,
+          district: { type: String, default: "" },
+          city: { type: String, default: "" },
+          cityRef: { type: String, default: "" },
+          settlementRef: { type: String, default: "" },
+          warehouse: { type: String, default: "" },
+          warehouseRef: { type: String, default: "" },
+          address: { type: String, default: "" },
+          post: { type: String, default: "" },
+          area: { type: String, default: "" },
+        },
+      ],
+      default: [],
+    },
     savedCompanies: {
       type: [{ companyName: String, edrpou: String, ipn: { type: String, default: "" } }],
       default: [],

@@ -4,6 +4,7 @@
 const path = require("path");
 const PDFDocument = require("pdfkit");
 const { isValidEdrpou } = require("./buyer");
+const { orderLabel } = require("./orderNumber");
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
@@ -31,7 +32,7 @@ const DEFAULT_COMPANY = {
   email: "",
   director: "",
   invoicePrefix: "РФ",
-  invoiceValidDays: 5,
+  invoiceValidDays: 3,
   note: "",
 };
 
@@ -118,10 +119,18 @@ const FONT = path.join(__dirname, "..", "assets", "fonts", "DejaVuSans.ttf");
 const FONT_BOLD = path.join(__dirname, "..", "assets", "fonts", "DejaVuSans-Bold.ttf");
 
 // Призначення платежу для банку
-const paymentPurpose = (order, number) =>
-  `Оплата за рахунком ${number} (замовлення №${String(order._id).slice(-8).toUpperCase()})${
-    ""
-  }`;
+const paymentPurpose = (order, number) => `Оплата за рахунком ${number} (замовлення ${orderLabel(order)})`;
+
+// Платник у рахунку: юрособа/ФОП — назва й код; фізособа — ПІБ із замовлення
+function payerLine(order) {
+  if (order.buyer?.kind === "company") {
+    return `${order.buyer?.companyName || ""}, код ЄДРПОУ/РНОКПП ${order.buyer?.edrpou || ""}${
+      order.buyer?.ipn ? `, ІПН ${order.buyer.ipn}` : ""
+    }`;
+  }
+  const s = order.shippingInfo || {};
+  return `${s.name || "фізична особа"}${s.phone ? `, тел. ${s.phone}` : ""}`;
+}
 
 // PDF рахунку → Promise<Buffer>
 function renderPdf({ order, company, number, issuedAt, dueAt }) {
@@ -153,12 +162,10 @@ function renderPdf({ order, company, number, issuedAt, dueAt }) {
     doc.moveDown(0.8);
 
     doc.fontSize(10);
-    doc.font("B").text("Покупець: ", { continued: true });
-    doc.font("R").text(
-      `${order.buyer?.companyName || ""}, код ЄДРПОУ/РНОКПП ${order.buyer?.edrpou || ""}${order.buyer?.ipn ? `, ІПН ${order.buyer.ipn}` : ""}`
-    );
+    doc.font("B").text("Платник: ", { continued: true });
+    doc.font("R").text(payerLine(order));
     doc.font("B").text("Замовлення: ", { continued: true });
-    doc.font("R").text(`№${String(order._id).slice(-8).toUpperCase()}`);
+    doc.font("R").text(orderLabel(order));
     doc.moveDown(0.8);
 
     // Таблиця
@@ -225,6 +232,7 @@ module.exports = {
   formatNumber,
   buildInvoiceData,
   paymentPurpose,
+  payerLine,
   renderPdf,
   round2,
 };

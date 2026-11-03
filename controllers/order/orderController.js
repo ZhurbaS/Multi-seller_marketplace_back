@@ -75,6 +75,7 @@ class orderController {
         await authorOrderModel.updateMany({ orderId: id }, { delivery_status: "cancelled" });
         await stockService.releaseForOrder(id);
         await couponService.releaseForOrder(id); // купон знову доступний
+        require("../../utiles/orderNotify").notify(id, "cancelled");
       }
       return true;
     } catch (error) {
@@ -86,7 +87,7 @@ class orderController {
     // console.log(req.body);
     // Вартість доставки в замовлення НЕ входить (її оплачує покупець перевізнику
     // при отриманні), тому shipping_fee з клієнта ігноруємо.
-    const { products, shippingInfo: shippingInput, couponCode, buyer: buyerInput, comment: commentInput } = req.body;
+    const { products, shippingInfo: shippingInput, couponCode, buyer: buyerInput, comment: commentInput, acceptOferta } = req.body;
     // customerId завжди з токена (customerAuthMiddleware), а НЕ з тіла запиту —
     // раніше клієнт міг підставити чужий userId.
     const userId = req.id;
@@ -106,6 +107,10 @@ class orderController {
       return responseReturn(res, 400, { error: shippingCheck.error });
     }
     const shippingInfo = shippingCheck.value;
+
+    // Публічна оферта: поки адмін її не опублікував, згода не потрібна; після — обов'язкова, фіксуємо редакцію
+    const accepted = await require("../../utiles/legalService").acceptanceFor("oferta", acceptOferta === true);
+    if (!accepted.ok) return responseReturn(res, 400, { error: accepted.error });
 
     const tempDate = moment(Date.now()).format("LLL");
 
@@ -289,8 +294,10 @@ class orderController {
               }
             : {}),
           buyer,
+          orderNumber: await require("../../utiles/orderNumber").nextOrderNumber(),
           comment: sanitizeComment(commentInput),
           has_preorder: hasPreorder,
+          ...(accepted.acceptance ? { legalAcceptance: accepted.acceptance } : {}),
           payment_status: "unpaid",
           delivery_status: "pending",
           date: tempDate,
@@ -341,8 +348,10 @@ class orderController {
       try {
         const saved = require("../../utiles/savedContacts");
         const customerModel = require("../../models/customerModel");
-        const cust = await customerModel.findById(userId).select("savedRecipients savedCompanies");
+        const cust = await customerModel.findById(userId).select("savedRecipients savedCompanies savedAddresses");
         if (cust) {
+          const addr = require("../../utiles/shipping").sanitizeAddress(shippingInfo);
+          if (addr.value) cust.savedAddresses = saved.upsertAddress(cust.savedAddresses.map((x) => x.toObject()), addr.value);
           cust.savedRecipients = saved.upsertRecipient(cust.savedRecipients.map((x) => x.toObject()), shippingInfo.recipient);
           cust.savedCompanies = saved.upsertCompany(cust.savedCompanies.map((x) => x.toObject()), buyer);
           await cust.save();
@@ -353,6 +362,8 @@ class orderController {
 
       // Автоскасування неоплачених замовлень робить фонова перевірка
       // (utiles/orderExpiry.js) — вона переживає перезапуск сервера, на відміну від setTimeout.
+
+      require("../../utiles/orderNotify").notify(order._id, "placed"); // лист-підтвердження (не чекаємо)
 
       responseReturn(res, 200, {
         message: "Замовлення успішно оформлено",
@@ -432,21 +443,22 @@ class orderController {
     }
 
     try {
-      let orders = [];
-      if (status !== "all") {
-        orders = await customerOrderModel
-          .find({
-            customerId: new ObjectId(customerId),
-            delivery_status: status,
-          })
-          .sort({ createdAt: -1 });
-      } else {
-        orders = await customerOrderModel
-          .find({
-            customerId: new ObjectId(customerId),
-          })
-          .sort({ createdAt: -1 });
+      // Фільтри: статус, період (from/to — YYYY-MM-DD), пошук за номером замовлення (q)
+      const filter = { customerId: new ObjectId(customerId) };
+      if (status !== "all") filter.delivery_status = status;
+      const range = {};
+      const from = new Date(String(req.query.from || ""));
+      const to = new Date(String(req.query.to || ""));
+      if (!Number.isNaN(from.getTime())) range.$gte = from;
+      if (!Number.isNaN(to.getTime())) {
+        to.setHours(23, 59, 59, 999);
+        range.$lte = to;
       }
+      if (Object.keys(range).length) filter.createdAt = range;
+      const q = String(req.query.q || "").replace(/\D/g, "");
+      if (q) filter.orderNumber = Number(q);
+
+      const orders = await customerOrderModel.find(filter).sort({ createdAt: -1 }).limit(200);
 
       responseReturn(res, 200, {
         orders,
@@ -584,6 +596,13 @@ class orderController {
       if (!STATUSES.includes(status)) {
         return responseReturn(res, 400, { error: "Некоректний статус замовлення" });
       }
+      // Номер накладної перевізника (необов'язково) — потрапляє в лист «відправлено»
+      if (typeof req.body.trackingNumber === "string") {
+        await customerOrderModel.updateOne(
+          { _id: orderId },
+          { $set: { trackingNumber: req.body.trackingNumber.replace(/[^0-9A-Za-zА-Яа-яІіЇїЄє-]/g, "").slice(0, 40) } }
+        );
+      }
       if (status === current.delivery_status) {
         return responseReturn(res, 200, { message: "Статус замовлення не змінився" });
       }
@@ -647,6 +666,7 @@ class orderController {
         // Доставлено → починається відлік утримання (термін повернення)
         await ledger.releaseForOrder(new ObjectId(orderId));
       }
+      require("../../utiles/orderNotify").notifyStatus(orderId, status);
 
       return responseReturn(res, 200, {
         message: "Статус замовлення успішно змінено",
@@ -811,6 +831,7 @@ class orderController {
             { delivery_status: "cancelled" }
           );
           await couponService.releaseForOrder(order.orderId);
+          require("../../utiles/orderNotify").notify(order.orderId, "cancelled");
         }
       }
       // COD: коли всі підзамовлення доставлено — гроші отримано, нараховуємо гаманці.
@@ -823,6 +844,7 @@ class orderController {
             ...(parent && !parent.deliveredAt ? { deliveredAt: patch.deliveredAt } : {}),
           });
           await this.settleCodIfDelivered(order.orderId);
+          require("../../utiles/orderNotify").notify(order.orderId, "delivered");
         }
         await ledger.releaseForAuthorOrder(order._id);
       }

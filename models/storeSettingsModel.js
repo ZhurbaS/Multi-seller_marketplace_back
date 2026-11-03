@@ -23,7 +23,10 @@ const storeSettingsSchema = new Schema(
     returns: { type: Object, default: {} },
     // Реквізити магазину для рахунків юридичним особам (див. utiles/invoice.js) і лічильник номерів рахунків.
     company: { type: Object, default: {} },
+    // Юридичні документи (публічна оферта): текст, поля, вимикач показу, зафіксовані редакції — див. utiles/legalService.js
+    legal: { type: Object, default: {} },
     invoiceSeq: { type: Number, default: 0 },
+    orderSeq: { type: Number, default: 0 }, // лічильник номерів замовлень (utiles/orderNumber.js)
     // Знижка за сумою замовлення: від minTotal ₴ — percent %
     orderDiscountTiers: {
       type: [
