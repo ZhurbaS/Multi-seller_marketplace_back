@@ -627,6 +627,7 @@ class orderController {
         if (prev && prev.payment_status === "paid") {
           await returnService.createCancellationRefund({ order: prev, by: "admin" });
         }
+        require("../../utiles/contactStats").refreshStatsSafe(current.customerId);
         return responseReturn(res, 200, {
           message:
             prev && prev.payment_status === "paid"
@@ -670,6 +671,9 @@ class orderController {
         await ledger.releaseForOrder(new ObjectId(orderId));
       }
       require("../../utiles/orderNotify").notifyStatus(orderId, status);
+      if (status === "delivered") {
+        require("../../utiles/contactStats").refreshStatsSafe(current.customerId);
+      }
 
       return responseReturn(res, 200, {
         message: "Статус замовлення успішно змінено",

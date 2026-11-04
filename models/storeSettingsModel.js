@@ -25,6 +25,16 @@ const storeSettingsSchema = new Schema(
     company: { type: Object, default: {} },
     // Юридичні документи (публічна оферта): текст, поля, вимикач показу, зафіксовані редакції — див. utiles/legalService.js
     legal: { type: Object, default: {} },
+    // Месенджери для відправки рахунків (див. utiles/messengers)
+    messengers: { type: Object, default: {} },
+    // Тема магазину: { preset, overrides, history[] } — див. utiles/theme.js
+    theme: { type: Object, default: {} },
+    // Вітрина: { mode, autoThreshold, catalogBgUrl, showStoresLink } — див. utiles/storefront.js
+    storefront: { type: Object, default: {} },
+    // Банери: { home_hero:{autoplay, intervalSec}, announcement:{dismissible} } — див. utiles/siteBanner.js
+    bannerSettings: { type: Object, default: {} },
+    // Маркетинг (розсилки, автоматизації, тексти згоди) — див. utiles/marketingSettings.js
+    marketing: { type: Object, default: {} },
     invoiceSeq: { type: Number, default: 0 },
     orderSeq: { type: Number, default: 0 }, // лічильник номерів замовлень (utiles/orderNumber.js)
     // Знижка за сумою замовлення: від minTotal ₴ — percent %

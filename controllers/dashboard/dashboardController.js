@@ -153,7 +153,7 @@ class dashboardController {
           folder: "banners",
         });
 
-        if (!result || !result.url) {
+        if (!result || !(result.secure_url || result.url)) {
           return responseReturn(res, 500, {
             error: "Помилка завантаження банера",
           });
@@ -161,7 +161,7 @@ class dashboardController {
 
         const banner = await bannerModel.create({
           productId: productId,
-          banner: result.url,
+          banner: result.secure_url || result.url,
           link: slug,
         });
         responseReturn(res, 200, {
@@ -227,11 +227,11 @@ class dashboardController {
         const imageName = temp.split(".")[0];
         await cloudinary.uploader.destroy(imageName);
 
-        const { url } = await cloudinary.uploader.upload(mainban.filepath, {
+        const { url: plainUrl, secure_url } = await cloudinary.uploader.upload(mainban.filepath, {
           folder: "banners",
         });
 
-        await bannerModel.findByIdAndUpdate(bannerId, { banner: url });
+        await bannerModel.findByIdAndUpdate(bannerId, { banner: secure_url || plainUrl });
 
         banner = await bannerModel.findById(bannerId);
         return responseReturn(res, 200, {

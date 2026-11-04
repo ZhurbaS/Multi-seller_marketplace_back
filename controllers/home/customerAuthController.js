@@ -32,6 +32,8 @@ class customerAuthController {
         await sellerCustomerModel.create({
           myId: createdCustomer.id,
         });
+        // CRM-контакт (+ підписка, якщо поставлено галочку); не кидає помилок
+        require('../../utiles/contactStats').syncCustomerSafe({ customer: createdCustomer, source: 'register', marketing: marketing === true, req });
         // Якщо до реєстрації користувач вже наповнив кошик як гість — переносимо його
         const acc = require('../../utiles/accountService');
         const guestId = await acc.guestIdFromRequest(req);

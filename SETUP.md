@@ -244,6 +244,44 @@ cd back && npm test      # 83 тести: підписи monobank/LiqPay, іде
 
 ---
 
+## Розсилки (email + Telegram)
+
+Маркетингові листи йдуть **окремо** від транзакційних (замовлення, коди входу): з окремого піддомену, щоб скарги на розсилку не зачепили доставку важливих листів. Без налаштувань нижче магазин працює як раніше — просто без розсилок.
+
+### DNS для піддомену розсилок
+1. У Resend → Domains додайте піддомен (напр. `news.ваш-домен.ua`) — саме той, з якого буде `MARKETING_MAIL_FROM`.
+2. Внесіть у DNS усі записи, які покаже Resend для цього піддомену: **SPF** (TXT/MX для піддомену відправлення) і **DKIM** (TXT `resend._domainkey…`). Значення беріть лише з кабінету Resend.
+3. Додайте **DMARC** для піддомену: TXT-запис `_dmarc.news.ваш-домен.ua`. Починайте з політики `p=none` (лише звіти), після кількох тижнів без проблем — `quarantine`/`reject`.
+4. Дочекайтесь статусу Verified у Resend, впишіть у `back/.env` `MARKETING_MAIL_FROM="Назва <news@news.ваш-домен.ua>"`, перезапустіть бек. Стан видно в адмінці: Маркетинг → «Підписка: налаштування й аналітика» (health).
+
+### Вебхук Resend (bounce / скарги)
+- Resend → Webhooks → Add endpoint: URL `<PUBLIC_API_URL>/api/webhooks/resend`, події `email.bounced`, `email.complained`, `email.suppressed`.
+- Скопіюйте Signing secret (`whsec_…`) у `RESEND_WEBHOOK_SECRET`. Підпис перевіряється (Svix, допуск 5 хв, повтори відкидаються); без секрету ендпойнт відповідає 503.
+- `PUBLIC_API_URL` має бути публічною адресою бека (локальний localhost Resend не бачить).
+
+### Telegram-бот
+1. @BotFather → `/newbot` → токен у `TELEGRAM_BOT_TOKEN`, ім'я бота (без `@`) у `TELEGRAM_BOT_USERNAME`; придумайте `TELEGRAM_WEBHOOK_SECRET` (латиниця, цифри, `_`, `-`).
+2. Зареєструйте вебхук (один раз, після запуску бека з публічною адресою):
+   ```
+   cd back && node -e "require('dotenv').config(); require('./utiles/telegramBot').setWebhook(process.env.PUBLIC_API_URL + '/api/webhooks/telegram').then(r => console.log(r))"
+   ```
+   Очікувана відповідь — `{ ok: true, ... }`. Перевірити: `https://api.telegram.org/bot<TOKEN>/getWebhookInfo`.
+3. Команди бота: `/start` (підписка лише після кнопки «Так, підписати» або за посиланням із сайту), `/topics`, `/stop`.
+
+### Воркер, проксі, кілька інстансів
+- Черга розсилок працює у фоні (кожні 30 с). На другому й наступних інстансах бека задайте `MARKETING_WORKER=off`.
+- Якщо бек стоїть за реверс-проксі (Render, Railway, Nginx), задайте `TRUST_PROXY=1` (кількість проксі) — інакше ліміти підписки рахуються за IP проксі, тобто спільно для всіх відвідувачів.
+- `SECRET` обов'язковий у production: без нього посилання відписки/налаштувань не формуються.
+
+### Перенесення наявних покупців у CRM
+```
+cd back && node scripts/backfillContacts.js --dry   # лише підрахунок
+cd back && node scripts/backfillContacts.js         # створити контакти, перенести давні згоди
+```
+Скрипт можна запускати повторно — відписки й скарги він не перезаписує.
+
+---
+
 ## Типові проблеми
 
 | Симптом | Причина | Рішення |

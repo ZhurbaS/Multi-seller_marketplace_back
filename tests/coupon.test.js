@@ -340,3 +340,11 @@ test("адреси: збереження без дублів, самовивіз
   assert.equal(orderLabel({ orderNumber: 100245 }), "№100245");
   assert.equal(orderLabel({ _id: "6ae846f2dad2d87546544b94" }), "№544B94");
 });
+
+test("коментар: HTML-теги й керуючі символи вирізаються, звичайний текст лишається", () => {
+  const sh = require("../utiles/shipping");
+  assert.equal(sh.sanitizeComment('Привіт <script>alert(1)</script> світ'), "Привіт alert(1) світ");
+  assert.equal(sh.sanitizeComment('<img src=x onerror=alert(1)>ok'), "ok");
+  assert.equal(sh.sanitizeComment("a\u0000b\u202Ec"), "abc");
+  assert.equal(sh.sanitizeComment("потрібно до 5 < 6 днів"), "потрібно до 5 < 6 днів");
+});

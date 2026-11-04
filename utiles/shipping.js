@@ -94,6 +94,8 @@ function sanitizeRecipient(r) {
 // Коментар до замовлення (контакт, побажання): до 1000 символів, переноси рядків зберігаємо
 function sanitizeComment(v) {
   return String(v ?? "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2066-\u2069]/g, "") // керуючі й «невидимі» символи
+    .replace(/<\/?[a-zA-Z!?][^>]*>?/g, "") // HTML-теги/коментарі (коментар — звичайний текст)
     .replace(/\r\n?/g, "\n")
     .replace(/[^\S\n]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")

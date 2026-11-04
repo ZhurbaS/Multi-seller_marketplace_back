@@ -159,11 +159,11 @@ class authControllers {
           folder: 'profile',
         });
 
-        if (!result || !result.url) {
+        if (!result || !(result.secure_url || result.url)) {
           return responseReturn(res, 500, { error: 'Не вдалося завантажити зображення' });
         }
         await sellerModel.findByIdAndUpdate(id, {
-          image: result.url,
+          image: result.secure_url || result.url,
         });
         const userInfo = await sellerModel.findById(id);
         return responseReturn(res, 200, {

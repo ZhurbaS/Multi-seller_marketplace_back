@@ -10,6 +10,11 @@ const { dbConnect } = require("./utiles/db");
 
 const app = express();
 const server = http.createServer(app);
+// За реверс-проксі задайте TRUST_PROXY (кількість проксі, напр. 1), щоб req.ip/ліміти бачили реальний IP
+{
+  const tp = require("./utiles/rateLimit").trustProxyValue(process.env.TRUST_PROXY);
+  if (tp !== false) app.set("trust proxy", tp);
+}
 
 // Додаткові дозволені адреси (Codespaces тощо) беруться з .env — через кому,
 // без пробілів і без слеша в кінці. Редагувати server.js для цього не потрібно.
@@ -220,6 +225,8 @@ app.use("/api", require("./routes/returnRoutes"));
 app.use("/api", require("./routes/couponRoutes"));
 app.use("/api", require("./routes/home/cardRoutes"));
 app.use("/api", require("./routes/home/checkoutRoutes"));
+app.use("/api", require("./routes/home/subscriptionRoutes"));
+app.use("/api", require("./routes/crmRoutes"));
 app.use("/api", require("./routes/dashboard/categoryRoutes"));
 app.use("/api", require("./routes/dashboard/productRoutes"));
 app.use("/api", require("./routes/dashboard/sellerRoutes"));
@@ -235,6 +242,7 @@ const port = process.env.PORT;
   try {
     await dbConnect();
     require("./utiles/orderExpiry").startOrderExpiry();
+    require("./utiles/marketingWorker").start(); // MARKETING_WORKER=off — вимкнено
     server.listen(port, () =>
       console.log(`✅ Server is running on port ${port}`)
     );

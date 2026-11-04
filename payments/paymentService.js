@@ -89,6 +89,8 @@ async function markOrderPaid(orderId, { provider, providerStatus, modifiedDate }
   await ledger.recordPaidOrder(order, authOrders);
   await couponService.markRedeemed(order._id);
   require("../utiles/orderNotify").notify(order._id, "paid");
+  // CRM: замовлення/LTV/категорії контакту (неблокуюче, помилки лише в лог)
+  require("../utiles/contactStats").refreshStatsSafe(order.customerId);
   return { changed: true, order };
 }
 

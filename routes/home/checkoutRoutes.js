@@ -179,6 +179,8 @@ router.post("/home/customer/email/confirm", customerAuthMiddleware, emailLimiter
     }
     const oldEmail = c.email;
     await customerModel.updateOne({ _id: c._id }, { $set: { email: p.email }, $unset: { pendingEmail: 1 } });
+    // CRM-контакт: нова адреса (злиття з наявним контактом цієї адреси); не кидає помилок
+    require("../../utiles/contactStats").syncCustomerEmailSafe(c._id, p.email, { oldEmail });
     // Токен містить e-mail — видаємо новий
     const token = await createToken({
       id: c.id,

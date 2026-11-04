@@ -180,7 +180,7 @@ class productController {
           const result = await uploadImageWithRetry(img.filepath, {
             folder: "products",
           });
-          allImageUrl.push(result.url);
+          allImageUrl.push(result.secure_url || result.url);
         }
 
         // Створення продукту
@@ -509,13 +509,13 @@ class productController {
             folder: "products",
           });
 
-          if (!result || !result.url) {
+          if (!result || !(result.secure_url || result.url)) {
             return responseReturn(res, 500, {
               error: "Помилка під час завантаження зображення",
             });
           }
 
-          newUrls.push(result.url);
+          newUrls.push(result.secure_url || result.url);
         }
 
         // Замінюємо одне старе зображення на одне або кілька нових array.splice(startIndex, deleteCount, item1, item2, ...)

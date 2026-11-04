@@ -79,6 +79,8 @@ class accessController {
       c.consents = [...(c.consents || []), ...consent.records];
       c.marketing = consent.marketing;
       await c.save();
+      // CRM-контакт (+ підписка, якщо поставлено галочку); не кидає помилок
+      require("../../utiles/contactStats").syncCustomerSafe({ customer: c, source: "checkout", marketing: req.body?.marketing === true, req });
       const token = await acc.issueSession(res, c);
       responseReturn(res, 200, { token, message: "Дані збережено" });
     } catch (e) {
@@ -156,6 +158,7 @@ class accessController {
           marketing: consent.marketing,
         });
         await sellerCustomerModel.create({ myId: c.id });
+        require("../../utiles/contactStats").syncCustomerSafe({ customer: c, source: "google", marketing: req.body?.marketing === true, req });
       } else if (!c.googleId) {
         // Існуючий акаунт із тим самим підтвердженим Google e-mail — прив'язуємо Google
         await customerModel.updateOne({ _id: c._id }, { $set: { googleId: v.sub, emailVerified: true } });
