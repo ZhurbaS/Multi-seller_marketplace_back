@@ -91,6 +91,7 @@ class dashboardController {
         .limit(3);
       const recentOrders = await authorOrderModel
         .find({ sellerId: new ObjectId(id) })
+        .sort({ createdAt: -1 })
         .limit(5);
 
       responseReturn(res, 200, {

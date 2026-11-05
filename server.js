@@ -234,6 +234,7 @@ app.use("/api", require("./routes/home/customerAuthRoutes"));
 app.use("/api", require("./routes/chatRoutes"));
 app.use("/api", require("./routes/paymentRoutes"));
 app.use("/api", require("./routes/dashboard/dashboardRoutes"));
+app.use("/api", require("./routes/dashboard/analyticsRoutes"));
 
 app.get("/", (req, res) => res.send("My backend"));
 

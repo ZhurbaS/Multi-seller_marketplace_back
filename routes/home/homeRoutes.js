@@ -15,6 +15,10 @@ router.get("/price-range-latest-product", homeController.price_range_product);
 router.get("/query-products", homeController.query_products);
 router.get("/product-details/:slug", homeController.get_product_details);
 
+// Трекінг переглядів товару (privacy-first, без cookie) — завжди 204
+const trackController = require("../../controllers/home/trackController");
+router.post("/track", trackController.parseText, trackController.track);
+
 // Відгуки — публічний список тільки зі схваленими; надсилання і перевірка
 // права на відгук вимагають реального клієнта (customerAuthMiddleware),
 // а не просто productId+ім'я з тіла запиту, як було раніше.

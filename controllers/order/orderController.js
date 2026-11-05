@@ -817,6 +817,7 @@ class orderController {
       }
       const patch = { delivery_status: status };
       if (status === "delivered") patch.deliveredAt = new Date();
+      if (status === "shipped" && !order.shippedAt) patch.shippedAt = new Date(); // SLA відправлення (аналітика)
       await authorOrderModel.findByIdAndUpdate(orderId, patch);
       if (status === "cancelled") {
         await stockService.releaseForAuthorOrder(orderId);

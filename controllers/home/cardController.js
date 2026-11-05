@@ -34,6 +34,14 @@ class cardController {
         return responseReturn(res, 404, { error: "Товар уже в кошику" });
       }
       const product = await cardModel.create({ userId, productId, quantity });
+      // Аналітика: +1 «додано в кошик» (не блокує й не ламає основний потік)
+      try {
+        require("../../utiles/tracking")
+          .recordCart(dbProduct)
+          .catch((e) => console.error("track cart:", e?.message));
+      } catch (e) {
+        console.error("track cart:", e?.message);
+      }
       responseReturn(res, 201, {
         message: avail.preorder
           ? "Передзамовлення додано до кошика"

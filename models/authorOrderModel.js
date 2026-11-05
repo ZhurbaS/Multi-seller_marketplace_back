@@ -35,6 +35,7 @@ const authorOrderSchema = new Schema(
       required: true,
     },
     deliveredAt: { type: Date, default: null },
+    shippedAt: { type: Date, default: null }, // перша зміна статусу на «shipped» (SLA відправлення)
     // Знімок комісії на момент замовлення (зміна ставки пізніше історію не чіпає).
     // Старі замовлення цих полів не мають.
     commission: { type: Number },
